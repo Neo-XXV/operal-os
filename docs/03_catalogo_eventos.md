@@ -164,13 +164,22 @@ Este catálogo cubre exclusivamente **eventos del Lead** — hechos que ocurren 
 **Payload:**
 ```json
 {
-  "tipo": "PRECIO | TIEMPO | CONFIANZA | OTRA — taxonomía a definir",
+  "tipo": "PRECIO | DESCONFIANZA | TIEMPO | EXPERIENCIA_PREVIA_SIMILAR | YA_TIENE_PROVEEDOR | YA_PAGO_MENTOR | OTRA",
   "detalle": "texto libre",
   "es_nueva": true
 }
 ```
 
-**Reglas:** Ninguna todavía sobre revisión/actualización de guía central — **pregunta abierta pendiente de tu respuesta** (¿alguien revisa las objeciones nuevas y las suma a una guía, o quedan archivadas?).
+Taxonomía cerrada (definida con el dueño del negocio):
+- `PRECIO`
+- `DESCONFIANZA`
+- `TIEMPO`
+- `EXPERIENCIA_PREVIA_SIMILAR` — ya intentó algo parecido antes
+- `YA_TIENE_PROVEEDOR` — ya está trabajando con alguien
+- `YA_PAGO_MENTOR` — ya le pagó a un mentor/coach
+- `OTRA` — para lo que no encaje en ninguna de las anteriores
+
+**Reglas:** Ninguna todavía sobre revisión/actualización de guía central — **pregunta abierta pendiente de tu respuesta** (¿alguien revisa las objeciones nuevas y las suma a una guía, o quedan archivadas?). No puede registrarse sobre un lead descartado (ver reglas de `LEAD_DESCARTADO`).
 
 **Dispara:** Objeciones más frecuentes, objeciones por setter, objeciones asociadas a leads perdidos.
 
@@ -192,7 +201,7 @@ Este catálogo cubre exclusivamente **eventos del Lead** — hechos que ocurren 
 }
 ```
 
-**Reglas:** Después de `LEAD_DESCARTADO` no pueden generarse nuevos eventos comerciales (`SEGUIMIENTO_ENVIADO`, `ESTADO_CAMBIADO`, `RESPUESTA_RECIBIDA`) para ese lead, salvo que en una versión futura exista una funcionalidad explícita de reapertura. Ver `02_reglas_de_negocio.md` para la lista fija de motivos válidos (no se acepta texto libre en `motivo`).
+**Reglas:** Después de `LEAD_DESCARTADO` no pueden generarse nuevos eventos comerciales — `SEGUIMIENTO_ENVIADO`, `ESTADO_CAMBIADO`, `RESPUESTA_RECIBIDA`, `OBJECION_REGISTRADA` — para ese lead, salvo que en una versión futura exista una funcionalidad explícita de reapertura. Tampoco puede reasignarse a otro setter (`LEAD_ASIGNADO`): un lead descartado queda cerrado, no se vuelve a trabajar. **Excepción:** `NOTA_AGREGADA` sí puede registrarse después del descarte — es el mecanismo para que el setter deje cualquier explicación de contexto, incluyendo el motivo real detrás del descarte si quiere ampliarlo más allá del campo `motivo` fijo de este evento. Ver `02_reglas_de_negocio.md` para la lista fija de motivos válidos (no se acepta texto libre en `motivo`).
 
 **Dispara:** Tasa de descarte por motivo, tasa de descarte por setter, punto del embudo donde más se pierden leads.
 
@@ -213,7 +222,7 @@ Este catálogo cubre exclusivamente **eventos del Lead** — hechos que ocurren 
 }
 ```
 
-**Reglas:** No reemplaza objeciones, cambios de estado ni seguimientos — si el contenido de la nota encaja en otro tipo de evento, debe registrarse como ese tipo, no como nota.
+**Reglas:** No reemplaza objeciones, cambios de estado ni seguimientos — si el contenido de la nota encaja en otro tipo de evento, debe registrarse como ese tipo, no como nota. A diferencia del resto de los eventos comerciales, sí puede registrarse sobre un lead con `LEAD_DESCARTADO` (ver reglas de ese evento) — es la única forma de dejar contexto adicional sobre un lead ya cerrado.
 
 **Dispara:** Nada calculable directamente; es información de contexto para lectura humana.
 
@@ -236,7 +245,6 @@ Este catálogo cubre exclusivamente **eventos del Lead** — hechos que ocurren 
 
 - Eventos administrativos (`IMPORTACION_REALIZADA`, `SETTER_CREADO`, `SETTER_DESACTIVADO`, `REPORTE_DIARIO_ENVIADO`) → `09_eventos_administrativos.md`.
 - Eventos generados por IA (`ANOMALIA_DETECTADA` y similares) → pospuestos a V2, se diseñan recién cuando exista la funcionalidad de IA.
-- Taxonomía cerrada de tipos de objeción → a definir con el negocio.
 - Respuesta a: ¿las objeciones nuevas se revisan y suman a una guía central, o quedan archivadas?
 
 ---
