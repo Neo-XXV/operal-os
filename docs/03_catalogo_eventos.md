@@ -70,7 +70,7 @@ Este catálogo cubre exclusivamente **eventos del Lead** — hechos que ocurren 
 
 **Descripción:** Un lead queda bajo la responsabilidad de un setter. Incluye tanto la primera asignación como reasignaciones posteriores.
 
-**Quién lo genera:** Admin o Sistema.
+**Quién lo genera:** Admin, Sistema o Setter (auto-asignación al crear un lead).
 
 **Cuándo ocurre:** Al repartir un lead nuevo, o al reasignarlo de un setter a otro.
 

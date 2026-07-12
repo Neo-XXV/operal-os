@@ -22,13 +22,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Send, MessageSquare, AlertTriangle, StickyNote } from "lucide-react";
+import { ArrowLeft, Plus, Send, MessageSquare, AlertTriangle, StickyNote, XCircle } from "lucide-react";
 
 const EVENT_TYPES = [
   { value: "ESTADO_CAMBIADO", label: "Cambio de estado", icon: Send },
   { value: "SEGUIMIENTO_ENVIADO", label: "Seguimiento enviado", icon: Send },
   { value: "RESPUESTA_RECIBIDA", label: "Respuesta recibida", icon: MessageSquare },
   { value: "OBJECION_REGISTRADA", label: "Objecion registrada", icon: AlertTriangle },
+  { value: "LEAD_DESCARTADO", label: "Lead descartado", icon: XCircle },
   { value: "NOTA_AGREGADA", label: "Nota agregada", icon: StickyNote },
 ];
 
@@ -42,6 +43,14 @@ const TIPOS_OBJECION = [
   { value: "YA_TIENE_PROVEEDOR", label: "Ya tiene proveedor" },
   { value: "YA_PAGO_MENTOR", label: "Ya le pagó a un mentor/coach" },
   { value: "OTRA", label: "Otra" },
+];
+
+const MOTIVOS_DESCARTE = [
+  { value: "SIN_RESPUESTA", label: "Sin respuesta" },
+  { value: "RECHAZO_EXPLICITO", label: "Rechazo explicito" },
+  { value: "NO_CALIFICA", label: "No califica" },
+  { value: "DUPLICADO", label: "Duplicado" },
+  { value: "ERROR_CARGA", label: "Error de carga" },
 ];
 
 export default function LeadDetail() {
@@ -319,6 +328,32 @@ export default function LeadDetail() {
                           value={detalle}
                           onChange={(e) => setDetalle(e.target.value)}
                           placeholder="Describe la objecion..."
+                        />
+                      </div>
+                    </>
+                  )}
+
+                  {eventType === "LEAD_DESCARTADO" && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Motivo</Label>
+                        <Select value={motivo} onValueChange={setMotivo}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar motivo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {MOTIVOS_DESCARTE.map((m) => (
+                              <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Detalle (opcional)</Label>
+                        <Textarea
+                          value={detalle}
+                          onChange={(e) => setDetalle(e.target.value)}
+                          placeholder="Contexto adicional del descarte..."
                         />
                       </div>
                     </>

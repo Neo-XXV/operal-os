@@ -30,12 +30,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   const navItems = [
     { href: "/", label: "Dashboard", icon: Home },
-    ...(isAdmin
-      ? [
-          { href: "/usuarios", label: "Usuarios", icon: Users },
-          { href: "/leads", label: "Leads", icon: UserPlus },
-        ]
-      : []),
+    ...(isAdmin ? [{ href: "/usuarios", label: "Usuarios", icon: Users }] : []),
+    { href: "/leads", label: "Leads", icon: UserPlus },
     { href: "/event-log", label: "Event Log", icon: ClipboardList },
   ];
 
