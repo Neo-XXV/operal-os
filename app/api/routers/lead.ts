@@ -1,11 +1,15 @@
 import { z } from "zod";
-import { createRouter, adminQuery, authedQuery } from "../middleware";
+import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { leads, eventos } from "@db/schema";
 import { eq, desc, and } from "drizzle-orm";
 
 export const leadRouter = createRouter({
-  create: adminQuery
+  // El setter carga el lead cuando decide contactarlo: LEAD_CREADO, la
+  // auto-asignacion y la primera transicion (null -> A) ocurren en el mismo acto.
+  // Admin/manager pueden cargar leads sin asignarlos ni moverlos de etapa todavia
+  // (p.ej. carga en lote antes de repartir).
+  create: authedQuery
     .input(
       z.object({
         nombre: z.string().min(1, "Nombre requerido"),
@@ -16,32 +20,48 @@ export const leadRouter = createRouter({
     )
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
+      const esSetter = ctx.user.rol === "SETTER";
+      const setterAsignado = esSetter ? ctx.user.id : input.setterId;
 
-      const [{ id: leadId }] = await db
-        .insert(leads)
-        .values({
-          nombre: input.nombre,
-          instagramUsername: input.instagramUsername,
-        })
-        .$returningId();
+      const leadId = await db.transaction(async (tx) => {
+        const [{ id: leadId }] = await tx
+          .insert(leads)
+          .values({
+            nombre: input.nombre,
+            instagramUsername: input.instagramUsername,
+          })
+          .$returningId();
 
-      await db.insert(eventos).values({
-        tipo: "LEAD_CREADO" as any,
-        leadId,
-        actorTipo: ctx.user.rol as any,
-        actorId: ctx.user.id,
-        payload: { origen: input.origen },
-      } as any);
-
-      if (input.setterId) {
-        await db.insert(eventos).values({
-          tipo: "LEAD_ASIGNADO" as any,
+        await tx.insert(eventos).values({
+          tipo: "LEAD_CREADO" as any,
           leadId,
           actorTipo: ctx.user.rol as any,
           actorId: ctx.user.id,
-          payload: { setter_anterior: null, setter_nuevo: input.setterId },
+          payload: { origen: input.origen },
         } as any);
-      }
+
+        if (setterAsignado) {
+          await tx.insert(eventos).values({
+            tipo: "LEAD_ASIGNADO" as any,
+            leadId,
+            actorTipo: ctx.user.rol as any,
+            actorId: ctx.user.id,
+            payload: { setter_anterior: null, setter_nuevo: setterAsignado },
+          } as any);
+        }
+
+        if (esSetter) {
+          await tx.insert(eventos).values({
+            tipo: "ESTADO_CAMBIADO" as any,
+            leadId,
+            actorTipo: ctx.user.rol as any,
+            actorId: ctx.user.id,
+            payload: { estado_anterior: null, estado_nuevo: "A" },
+          } as any);
+        }
+
+        return leadId;
+      });
 
       const lead = await db.query.leads.findFirst({
         where: eq(leads.id, leadId),
@@ -100,6 +120,11 @@ export const leadRouter = createRouter({
       const db = getDb();
 
       const proyecciones = await obtenerProyecciones(db, input.leadId);
+
+      if (proyecciones.descartado) {
+        throw new Error("El lead esta descartado. No se puede reasignar.");
+      }
+
       const setterAnterior = proyecciones.setterActual;
 
       if (setterAnterior === input.setterId) {

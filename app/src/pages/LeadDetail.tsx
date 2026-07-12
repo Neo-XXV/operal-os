@@ -34,6 +34,16 @@ const EVENT_TYPES = [
 
 const ETAPAS = ["A", "MS", "B", "C", "D"];
 
+const TIPOS_OBJECION = [
+  { value: "PRECIO", label: "Precio" },
+  { value: "DESCONFIANZA", label: "Desconfianza" },
+  { value: "TIEMPO", label: "Tiempo" },
+  { value: "EXPERIENCIA_PREVIA_SIMILAR", label: "Ya intentó algo parecido antes" },
+  { value: "YA_TIENE_PROVEEDOR", label: "Ya tiene proveedor" },
+  { value: "YA_PAGO_MENTOR", label: "Ya le pagó a un mentor/coach" },
+  { value: "OTRA", label: "Otra" },
+];
+
 export default function LeadDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -49,6 +59,7 @@ export default function LeadDetail() {
   const [estadoNuevo, setEstadoNuevo] = useState("");
   const [etapa, setEtapa] = useState("");
   const [numero, setNumero] = useState("1");
+  const [tipoObjecion, setTipoObjecion] = useState("");
   const [motivo, setMotivo] = useState("");
   const [detalle, setDetalle] = useState("");
   const [contexto, setContexto] = useState("");
@@ -70,6 +81,7 @@ export default function LeadDetail() {
     setEstadoNuevo("");
     setEtapa("");
     setNumero("1");
+    setTipoObjecion("");
     setMotivo("");
     setDetalle("");
     setContexto("");
@@ -95,7 +107,8 @@ export default function LeadDetail() {
         payload = { contexto };
         break;
       case "OBJECION_REGISTRADA":
-        payload = { tipo: "OTRA", detalle, es_nueva: true };
+        if (!tipoObjecion) { setError("Selecciona el tipo de objecion"); return; }
+        payload = { tipo: tipoObjecion, detalle, es_nueva: true };
         break;
       case "LEAD_DESCARTADO":
         if (!motivo) { setError("Selecciona el motivo"); return; }
@@ -286,14 +299,29 @@ export default function LeadDetail() {
                   )}
 
                   {eventType === "OBJECION_REGISTRADA" && (
-                    <div className="space-y-2">
-                      <Label>Detalle de la objecion</Label>
-                      <Textarea
-                        value={detalle}
-                        onChange={(e) => setDetalle(e.target.value)}
-                        placeholder="Describe la objecion..."
-                      />
-                    </div>
+                    <>
+                      <div className="space-y-2">
+                        <Label>Tipo de objecion</Label>
+                        <Select value={tipoObjecion} onValueChange={setTipoObjecion}>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Seleccionar tipo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {TIPOS_OBJECION.map((t) => (
+                              <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Detalle de la objecion</Label>
+                        <Textarea
+                          value={detalle}
+                          onChange={(e) => setDetalle(e.target.value)}
+                          placeholder="Describe la objecion..."
+                        />
+                      </div>
+                    </>
                   )}
 
                   {eventType === "NOTA_AGREGADA" && (

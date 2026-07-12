@@ -101,35 +101,35 @@ export default function Leads() {
                 className="pl-9 w-48"
               />
             </div>
-            {isAdmin && (
-              <Dialog open={open} onOpenChange={setOpen}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="w-4 h-4 mr-2" />
-                    Nuevo lead
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Crear lead</DialogTitle>
-                  </DialogHeader>
-                  <form onSubmit={handleCreate} className="space-y-4 mt-2">
-                    <div className="space-y-2">
-                      <Label>Nombre</Label>
-                      <Input
-                        value={nombre}
-                        onChange={(e) => setNombre(e.target.value)}
-                        placeholder="Nombre del prospecto"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Instagram Username</Label>
-                      <Input
-                        value={igUsername}
-                        onChange={(e) => setIgUsername(e.target.value)}
-                        placeholder="sin @"
-                      />
-                    </div>
+            <Dialog open={open} onOpenChange={setOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="w-4 h-4 mr-2" />
+                  Nuevo lead
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Crear lead</DialogTitle>
+                </DialogHeader>
+                <form onSubmit={handleCreate} className="space-y-4 mt-2">
+                  <div className="space-y-2">
+                    <Label>Nombre</Label>
+                    <Input
+                      value={nombre}
+                      onChange={(e) => setNombre(e.target.value)}
+                      placeholder="Nombre del prospecto"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Instagram Username</Label>
+                    <Input
+                      value={igUsername}
+                      onChange={(e) => setIgUsername(e.target.value)}
+                      placeholder="sin @"
+                    />
+                  </div>
+                  {isAdmin && (
                     <div className="space-y-2">
                       <Label>Asignar a setter (opcional)</Label>
                       <Select
@@ -148,22 +148,22 @@ export default function Leads() {
                         </SelectContent>
                       </Select>
                     </div>
-                    {error && (
-                      <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
-                        {error}
-                      </p>
-                    )}
-                    <Button
-                      type="submit"
-                      className="w-full"
-                      disabled={createLead.isPending}
-                    >
-                      {createLead.isPending ? "Creando..." : "Crear lead"}
-                    </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
-            )}
+                  )}
+                  {error && (
+                    <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                      {error}
+                    </p>
+                  )}
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={createLead.isPending}
+                  >
+                    {createLead.isPending ? "Creando..." : "Crear lead"}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 

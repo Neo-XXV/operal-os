@@ -94,6 +94,19 @@ export const eventRouter = createRouter({
       }
 
       if (input.tipo === "OBJECION_REGISTRADA") {
+        const payload = input.payload as { tipo: string };
+        const tiposValidos = [
+          "PRECIO",
+          "DESCONFIANZA",
+          "TIEMPO",
+          "EXPERIENCIA_PREVIA_SIMILAR",
+          "YA_TIENE_PROVEEDOR",
+          "YA_PAGO_MENTOR",
+          "OTRA",
+        ];
+        if (!tiposValidos.includes(payload.tipo)) {
+          throw new Error(`Tipo de objecion invalido: ${payload.tipo}`);
+        }
         await verificarLeadActivo(db, input.leadId);
       }
 
@@ -106,9 +119,8 @@ export const eventRouter = createRouter({
         await verificarLeadActivo(db, input.leadId);
       }
 
-      if (input.tipo === "NOTA_AGREGADA") {
-        await verificarLeadActivo(db, input.leadId);
-      }
+      // NOTA_AGREGADA es la unica excepcion al bloqueo post-descarte: es el
+      // mecanismo para dejar contexto adicional sobre un lead ya cerrado.
 
       const result = await db.insert(eventos).values({
         tipo: input.tipo as any,
