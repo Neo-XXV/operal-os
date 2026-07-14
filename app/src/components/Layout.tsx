@@ -34,7 +34,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(isSetter ? [] : [{ href: "/", label: "Dashboard", icon: Home }]),
     ...(isAdmin ? [{ href: "/usuarios", label: "Usuarios", icon: Users }] : []),
     { href: "/leads", label: "Leads", icon: UserPlus },
-    { href: "/event-log", label: "Event Log", icon: ClipboardList },
+    // Event Log es una vista de auditoria global — no aporta al centro
+    // operativo del setter (su tabla + el detalle de cada lead). Sigue
+    // existiendo para ADMIN/MANAGER, solo se saca del nav del setter.
+    ...(isSetter ? [] : [{ href: "/event-log", label: "Event Log", icon: ClipboardList }]),
   ];
 
   return (
