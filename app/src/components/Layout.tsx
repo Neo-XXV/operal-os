@@ -12,7 +12,7 @@ import {
 import { useState } from "react";
 
 export function Layout({ children }: { children: React.ReactNode }) {
-  const { user, isLoading, logout, isAdmin } = useAuth();
+  const { user, isLoading, logout, isAdmin, isSetter } = useAuth();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -29,7 +29,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   }
 
   const navItems = [
-    { href: "/", label: "Dashboard", icon: Home },
+    // Sprint 2: para el setter, la tabla de leads reemplaza al Dashboard —
+    // no tiene sentido dejar un link que solo rebota para otro lado.
+    ...(isSetter ? [] : [{ href: "/", label: "Dashboard", icon: Home }]),
     ...(isAdmin ? [{ href: "/usuarios", label: "Usuarios", icon: Users }] : []),
     { href: "/leads", label: "Leads", icon: UserPlus },
     { href: "/event-log", label: "Event Log", icon: ClipboardList },

@@ -1,11 +1,19 @@
+import { Navigate } from "react-router";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, UserPlus, ClipboardList, Activity } from "lucide-react";
+import { Users, UserPlus, ClipboardList, Activity, TriangleAlert } from "lucide-react";
+
+const TRANSICIONES = [
+  { key: "MSR", label: "A → MS", desc: "Respondio al primer mensaje" },
+  { key: "PRR", label: "MS → B", desc: "Recibio el pitch" },
+  { key: "CSR", label: "B → C", desc: "Agendo en el calendario" },
+  { key: "ABR", label: "C → D", desc: "Confirmo el calendario" },
+] as const;
 
 export default function Dashboard() {
-  const { user, isAdmin } = useAuth();
+  const { user, isAdmin, isSetter } = useAuth();
   const { data: leads } = trpc.lead.list.useQuery();
   const { data: allEvents } = trpc.event.list.useQuery(
     { limit: 100 },
@@ -15,6 +23,13 @@ export default function Dashboard() {
     { limit: 100 },
     { enabled: !isAdmin }
   );
+  const { data: embudo } = trpc.event.embudo.useQuery(undefined, { enabled: isAdmin });
+
+  // Sprint 2: la tabla de leads es el centro operativo del setter — no un
+  // dashboard de KPIs al que se llega navegando.
+  if (isSetter) {
+    return <Navigate to="/leads" replace />;
+  }
 
   const events = isAdmin ? allEvents : myEvents;
 
@@ -40,6 +55,20 @@ export default function Dashboard() {
   };
 
   const stageOrder = ["A", "MS", "B", "C", "D", "Sin etapa"];
+
+  // Cuello de botella: la transicion con la tasa mas baja entre las 4 (ignora
+  // las que todavia no tienen datos — null no es "peor que 0").
+  let cuelloDeBotella: (typeof TRANSICIONES)[number]["key"] | null = null;
+  if (embudo) {
+    let min = Infinity;
+    for (const t of TRANSICIONES) {
+      const valor = embudo.tasas[t.key];
+      if (valor !== null && valor < min) {
+        min = valor;
+        cuelloDeBotella = t.key;
+      }
+    }
+  }
 
   return (
     <Layout>
@@ -146,6 +175,52 @@ export default function Dashboard() {
                     <div className="w-12 text-right text-sm text-slate-500">
                       {count}
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Conversion entre etapas — Sprint 2, punto 2 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Conversion entre etapas</CardTitle>
+            <p className="text-sm text-slate-500">
+              Que porcentaje de los leads que llegan a una etapa avanzan a la siguiente
+            </p>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {TRANSICIONES.map((t) => {
+                const valor = embudo?.tasas[t.key] ?? null;
+                const esCuelloDeBotella = t.key === cuelloDeBotella;
+                return (
+                  <div
+                    key={t.key}
+                    className={`rounded-lg border p-4 ${
+                      esCuelloDeBotella
+                        ? "border-amber-300 bg-amber-50"
+                        : "border-slate-200 bg-white"
+                    }`}
+                  >
+                    <p className="text-xs font-medium text-slate-500">
+                      {t.label} <span className="text-slate-400">({t.key})</span>
+                    </p>
+                    <p className="text-2xl font-semibold text-slate-900 mt-1">
+                      {valor === null ? "—" : `${Math.round(valor * 100)}%`}
+                    </p>
+                    <p className="text-xs text-slate-400 mt-1">{t.desc}</p>
+                    {valor === null ? (
+                      <p className="text-xs text-slate-400 mt-2">Sin datos todavia</p>
+                    ) : (
+                      esCuelloDeBotella && (
+                        <div className="flex items-center gap-1 mt-2 text-xs font-medium text-amber-700">
+                          <TriangleAlert className="w-3.5 h-3.5" />
+                          Cuello de botella
+                        </div>
+                      )
+                    )}
                   </div>
                 );
               })}

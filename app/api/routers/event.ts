@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, authedQuery } from "../middleware";
+import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { leads, eventos } from "@db/schema";
 import { eq, desc, and } from "drizzle-orm";
@@ -47,6 +47,15 @@ async function obtenerEstadoActual(db: ReturnType<typeof getDb>, leadId: number)
     : null;
 }
 
+// El numero de seguimiento se deriva contando eventos previos en la misma
+// etapa — nunca se pide como dato al cliente (Sprint 2, principio de UX).
+async function contarSeguimientos(db: ReturnType<typeof getDb>, leadId: number, etapa: string) {
+  const previos = await db.query.eventos.findMany({
+    where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "SEGUIMIENTO_ENVIADO")),
+  });
+  return previos.filter((e) => (e.payload as { etapa: string }).etapa === etapa).length;
+}
+
 export const eventRouter = createRouter({
   create: authedQuery
     .input(
@@ -78,6 +87,8 @@ export const eventRouter = createRouter({
         }
       }
 
+      let payloadFinal = input.payload;
+
       if (input.tipo === "ESTADO_CAMBIADO") {
         const payload = input.payload as { estado_anterior: string; estado_nuevo: string };
         const estadoActual = await obtenerEstadoActual(db, input.leadId);
@@ -87,6 +98,15 @@ export const eventRouter = createRouter({
 
       if (input.tipo === "SEGUIMIENTO_ENVIADO") {
         await verificarLeadActivo(db, input.leadId);
+        const etapaActual = await obtenerEstadoActual(db, input.leadId);
+        if (!etapaActual) {
+          throw new Error("El lead todavia no tiene un estado registrado (A); no se puede enviar un seguimiento.");
+        }
+        if (etapaActual === "D") {
+          throw new Error("El lead ya esta en D; no aplica un seguimiento.");
+        }
+        const numeroActual = await contarSeguimientos(db, input.leadId, etapaActual);
+        payloadFinal = { etapa: etapaActual, numero: numeroActual + 1 };
       }
 
       if (input.tipo === "RESPUESTA_RECIBIDA") {
@@ -127,7 +147,7 @@ export const eventRouter = createRouter({
         leadId: input.leadId,
         actorTipo: ctx.user.rol as any,
         actorId: ctx.user.id,
-        payload: input.payload,
+        payload: payloadFinal,
       }).$returningId();
 
       const insertedId = result[0]?.id;
@@ -213,4 +233,48 @@ export const eventRouter = createRouter({
         with: { lead: true, actor: true },
       });
     }),
+
+  // Sprint 2, punto 2: embudo general con tasas de conversion entre etapas
+  // consecutivas (MSR, PRR, CSR, ABR), calculado leyendo el Event Log —
+  // ningun conteo ni tasa se guarda como dato.
+  embudo: adminQuery.query(async () => {
+    const db = getDb();
+
+    const cambiosEstado = await db.query.eventos.findMany({
+      where: eq(eventos.tipo, "ESTADO_CAMBIADO"),
+    });
+
+    const leadsPorEtapa: Record<string, Set<number>> = {
+      A: new Set(),
+      MS: new Set(),
+      B: new Set(),
+      C: new Set(),
+      D: new Set(),
+    };
+    for (const ev of cambiosEstado) {
+      const estadoNuevo = (ev.payload as { estado_nuevo: string }).estado_nuevo;
+      leadsPorEtapa[estadoNuevo]?.add(ev.leadId);
+    }
+
+    const conteos = {
+      A: leadsPorEtapa.A.size,
+      MS: leadsPorEtapa.MS.size,
+      B: leadsPorEtapa.B.size,
+      C: leadsPorEtapa.C.size,
+      D: leadsPorEtapa.D.size,
+    };
+
+    const tasa = (numerador: number, denominador: number) =>
+      denominador > 0 ? numerador / denominador : null;
+
+    return {
+      conteos,
+      tasas: {
+        MSR: tasa(conteos.MS, conteos.A),
+        PRR: tasa(conteos.B, conteos.MS),
+        CSR: tasa(conteos.C, conteos.B),
+        ABR: tasa(conteos.D, conteos.C),
+      },
+    };
+  }),
 });

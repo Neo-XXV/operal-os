@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { leads, eventos } from "@db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, inArray } from "drizzle-orm";
 
 export const leadRouter = createRouter({
   // El setter carga el lead cuando decide contactarlo: LEAD_CREADO, la
@@ -12,7 +12,9 @@ export const leadRouter = createRouter({
   create: authedQuery
     .input(
       z.object({
-        nombre: z.string().min(1, "Nombre requerido"),
+        // Nombre queda vacio si no se completa (p.ej. carga rapida por username) —
+        // es un dato real que se completa despues, no se rellena con un valor falso.
+        nombre: z.string().default(""),
         instagramUsername: z.string().min(1, "Username requerido"),
         setterId: z.number().optional(),
         origen: z.enum(["SCRAPING", "MANUAL", "RPP"]).default("MANUAL"),
@@ -75,12 +77,11 @@ export const leadRouter = createRouter({
       orderBy: (leads, { desc }) => [desc(leads.id)],
     });
 
-    const leadsConProyecciones = await Promise.all(
-      allLeads.map(async (lead) => {
-        const proyecciones = await obtenerProyecciones(db, lead.id);
-        return { ...lead, ...proyecciones };
-      }),
-    );
+    const proyecciones = await obtenerProyeccionesLote(db, allLeads.map((l) => l.id));
+    const leadsConProyecciones = allLeads.map((lead) => ({
+      ...lead,
+      ...(proyecciones.get(lead.id) ?? PROYECCION_VACIA),
+    }));
 
     if (ctx.user.rol === "SETTER") {
       return leadsConProyecciones.filter(
@@ -100,13 +101,43 @@ export const leadRouter = createRouter({
       });
       if (!lead) return null;
 
-      const proyecciones = await obtenerProyecciones(db, lead.id);
+      const proyecciones = (await obtenerProyeccionesLote(db, [lead.id])).get(lead.id) ?? PROYECCION_VACIA;
 
       if (ctx.user.rol === "SETTER" && proyecciones.setterActual !== ctx.user.id) {
         return null;
       }
 
       return { ...lead, ...proyecciones };
+    }),
+
+  // Nombre e Instagram son campos propios de la entidad Lead (no proyecciones
+  // del Event Log) — editables directamente, como marca la tabla de columnas
+  // del Sprint 2.
+  update: authedQuery
+    .input(
+      z.object({
+        id: z.number(),
+        nombre: z.string().optional(),
+        instagramUsername: z.string().min(1, "Username requerido").optional(),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+
+      if (ctx.user.rol === "SETTER") {
+        const proyecciones = (await obtenerProyeccionesLote(db, [input.id])).get(input.id) ?? PROYECCION_VACIA;
+        if (proyecciones.setterActual !== ctx.user.id) {
+          throw new Error("No tienes asignado este lead");
+        }
+      }
+
+      const { id, ...data } = input;
+      if (Object.keys(data).length === 0) {
+        throw new Error("Nada para actualizar");
+      }
+
+      await db.update(leads).set(data).where(eq(leads.id, id));
+      return db.query.leads.findFirst({ where: eq(leads.id, id) });
     }),
 
   assign: adminQuery
@@ -119,7 +150,7 @@ export const leadRouter = createRouter({
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
 
-      const proyecciones = await obtenerProyecciones(db, input.leadId);
+      const proyecciones = (await obtenerProyeccionesLote(db, [input.leadId])).get(input.leadId) ?? PROYECCION_VACIA;
 
       if (proyecciones.descartado) {
         throw new Error("El lead esta descartado. No se puede reasignar.");
@@ -146,40 +177,86 @@ export const leadRouter = createRouter({
     }),
 });
 
-async function obtenerProyecciones(
+type Proyeccion = {
+  setterActual: number | null;
+  etapaActual: string | null;
+  descartado: boolean;
+  motivoDescarte: string | null;
+  seguimientosCount: number;
+  ultimoContacto: Date | null;
+  ultimaNota: string | null;
+};
+
+const PROYECCION_VACIA: Proyeccion = {
+  setterActual: null,
+  etapaActual: null,
+  descartado: false,
+  motivoDescarte: null,
+  seguimientosCount: 0,
+  ultimoContacto: null,
+  ultimaNota: null,
+};
+
+// Trae en una sola query todos los eventos de los leads pedidos y calcula las
+// proyecciones de cada uno en memoria — evita el N+1 de resolver lead por lead.
+async function obtenerProyeccionesLote(
   db: ReturnType<typeof getDb>,
-  leadId: number,
-) {
-  const ultimaAsignacion = await db.query.eventos.findFirst({
-    where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "LEAD_ASIGNADO")),
+  leadIds: number[],
+): Promise<Map<number, Proyeccion>> {
+  const resultado = new Map<number, Proyeccion>();
+  if (leadIds.length === 0) return resultado;
+
+  const todosLosEventos = await db.query.eventos.findMany({
+    where: inArray(eventos.leadId, leadIds),
     orderBy: [desc(eventos.timestamp)],
   });
 
-  const setterActual = ultimaAsignacion
-    ? (ultimaAsignacion.payload as { setter_nuevo: number }).setter_nuevo
-    : null;
+  const porLead = new Map<number, typeof todosLosEventos>();
+  for (const ev of todosLosEventos) {
+    const lista = porLead.get(ev.leadId);
+    if (lista) lista.push(ev);
+    else porLead.set(ev.leadId, [ev]);
+  }
 
-  const ultimoEstado = await db.query.eventos.findFirst({
-    where: and(
-      eq(eventos.leadId, leadId),
-      eq(eventos.tipo, "ESTADO_CAMBIADO"),
-    ),
-    orderBy: [desc(eventos.timestamp)],
-  });
+  for (const leadId of leadIds) {
+    // ya vienen ordenados desc por timestamp
+    const eventosLead = porLead.get(leadId) ?? [];
 
-  const etapaActual = ultimoEstado
-    ? (ultimoEstado.payload as { estado_nuevo: string }).estado_nuevo
-    : null;
+    const ultimaAsignacion = eventosLead.find((e) => e.tipo === "LEAD_ASIGNADO");
+    const setterActual = ultimaAsignacion
+      ? (ultimaAsignacion.payload as { setter_nuevo: number }).setter_nuevo
+      : null;
 
-  const descarte = await db.query.eventos.findFirst({
-    where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "LEAD_DESCARTADO")),
-    orderBy: [desc(eventos.timestamp)],
-  });
+    const ultimoEstado = eventosLead.find((e) => e.tipo === "ESTADO_CAMBIADO");
+    const etapaActual = ultimoEstado
+      ? (ultimoEstado.payload as { estado_nuevo: string }).estado_nuevo
+      : null;
 
-  const descartado = !!descarte;
-  const motivoDescarte = descarte
-    ? (descarte.payload as { motivo: string }).motivo
-    : null;
+    const descarte = eventosLead.find((e) => e.tipo === "LEAD_DESCARTADO");
+    const descartado = !!descarte;
+    const motivoDescarte = descarte
+      ? (descarte.payload as { motivo: string }).motivo
+      : null;
 
-  return { setterActual, etapaActual, descartado, motivoDescarte };
+    const seguimientosCount = eventosLead.filter((e) => e.tipo === "SEGUIMIENTO_ENVIADO").length;
+
+    const ultimaNotaEv = eventosLead.find((e) => e.tipo === "NOTA_AGREGADA");
+    const ultimaNota = ultimaNotaEv
+      ? (ultimaNotaEv.payload as { texto: string }).texto
+      : null;
+
+    const ultimoContacto = eventosLead[0]?.timestamp ?? null;
+
+    resultado.set(leadId, {
+      setterActual,
+      etapaActual,
+      descartado,
+      motivoDescarte,
+      seguimientosCount,
+      ultimoContacto,
+      ultimaNota,
+    });
+  }
+
+  return resultado;
 }
