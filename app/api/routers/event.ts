@@ -292,6 +292,38 @@ function construirAsignacionPorSetter(
   return resultado;
 }
 
+// ─── Sprint 3, punto 4: comparacion por origen ───────────────────────────
+//
+// Mas simple que por setter: origen es fijo desde LEAD_CREADO y ese evento
+// ocurre una unica vez en toda la vida del lead (03_catalogo_eventos.md) —
+// no hay intervalos ni reasignaciones que reconstruir, solo un mapa directo
+// leadId -> origen. Por la misma razon no hace falta desempatar por id aca:
+// no hay "mas reciente" que elegir entre varios LEAD_CREADO de un mismo lead.
+const ORIGENES = ["SCRAPING", "MANUAL", "RPP"] as const;
+
+function construirEventosPorOrigen(
+  cambiosEstado: { leadId: number; payload: unknown }[],
+  creaciones: { leadId: number; payload: unknown }[],
+): Map<string, { leadId: number; payload: unknown }[]> {
+  const origenPorLead = new Map<number, string>();
+  for (const ev of creaciones) {
+    origenPorLead.set(ev.leadId, (ev.payload as { origen: string }).origen);
+  }
+
+  const resultado = new Map<string, { leadId: number; payload: unknown }[]>();
+  for (const ev of cambiosEstado) {
+    const origen = origenPorLead.get(ev.leadId);
+    if (!origen) continue;
+
+    const entrada = { leadId: ev.leadId, payload: ev.payload };
+    const lista = resultado.get(origen);
+    if (lista) lista.push(entrada);
+    else resultado.set(origen, [entrada]);
+  }
+
+  return resultado;
+}
+
 export const eventRouter = createRouter({
   create: authedQuery
     .input(
@@ -684,6 +716,51 @@ export const eventRouter = createRouter({
       return {
         ventana: { desde: ventana.desde, hasta: ventana.hasta },
         setters: setterStats,
+      };
+    }),
+
+  // Sprint 3, punto 4: comparacion por origen del lead (SCRAPING/MANUAL/RPP).
+  embudoPorOrigen: adminQuery
+    .input(
+      z.object({
+        periodo: z.enum(["lifetime", "mensual", "trimestral", "semestral", "anual", "rango"]),
+        desde: z.coerce.date().optional(),
+        hasta: z.coerce.date().optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const db = getDb();
+      const ventana = resolverVentana(input.periodo, input.desde, input.hasta);
+
+      const condicionesEstado = [eq(eventos.tipo, "ESTADO_CAMBIADO"), lte(eventos.timestamp, ventana.hasta)];
+      if (ventana.desde) condicionesEstado.push(gte(eventos.timestamp, ventana.desde));
+
+      const cambiosEstado = await db.query.eventos.findMany({
+        where: and(...condicionesEstado),
+      });
+
+      const leadIdsEnPeriodo = [...new Set(cambiosEstado.map((e) => e.leadId))];
+
+      // LEAD_CREADO se trae SIN acotar por fecha (el lead puede haberse
+      // creado mucho antes del periodo y tener actividad recien ahora).
+      const creaciones =
+        leadIdsEnPeriodo.length > 0
+          ? await db.query.eventos.findMany({
+              where: and(eq(eventos.tipo, "LEAD_CREADO"), inArray(eventos.leadId, leadIdsEnPeriodo)),
+            })
+          : [];
+
+      const eventosPorOrigen = construirEventosPorOrigen(cambiosEstado, creaciones);
+
+      // Se incluyen los 3 origenes siempre, incluso en cero.
+      const origenStats = ORIGENES.map((origen) => ({
+        origen,
+        ...calcularEmbudo(eventosPorOrigen.get(origen) ?? []),
+      }));
+
+      return {
+        ventana: { desde: ventana.desde, hasta: ventana.hasta },
+        origenes: origenStats,
       };
     }),
 });
