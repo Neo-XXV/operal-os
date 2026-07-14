@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { leads, eventos } from "@db/schema";
-import { eq, desc, and } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray, count } from "drizzle-orm";
 
 async function verificarLeadActivo(db: ReturnType<typeof getDb>, leadId: number) {
   const descarte = await db.query.eventos.findFirst({
@@ -54,6 +54,183 @@ async function contarSeguimientos(db: ReturnType<typeof getDb>, leadId: number, 
     where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "SEGUIMIENTO_ENVIADO")),
   });
   return previos.filter((e) => (e.payload as { etapa: string }).etapa === etapa).length;
+}
+
+// ─── Sprint 3, punto 1: dashboard ejecutivo ──────────────────────────────
+
+// Funcion pura: recibe eventos ESTADO_CAMBIADO ya filtrados por quien la
+// llama (por rango de fechas o no) y calcula conteos/tasas. No sabe de donde
+// vienen los eventos — el dia que existan proyecciones pre-calculadas
+// (Nota tecnica, 08_modelo_de_datos.md), esta funcion no cambia, solo cambia
+// que arreglo de eventos se le pasa.
+function calcularEmbudo(cambiosEstado: { leadId: number; payload: unknown }[]) {
+  const leadsPorEtapa: Record<string, Set<number>> = {
+    A: new Set(),
+    MS: new Set(),
+    B: new Set(),
+    C: new Set(),
+    D: new Set(),
+  };
+  for (const ev of cambiosEstado) {
+    const estadoNuevo = (ev.payload as { estado_nuevo: string }).estado_nuevo;
+    leadsPorEtapa[estadoNuevo]?.add(ev.leadId);
+  }
+
+  const conteos = {
+    A: leadsPorEtapa.A.size,
+    MS: leadsPorEtapa.MS.size,
+    B: leadsPorEtapa.B.size,
+    C: leadsPorEtapa.C.size,
+    D: leadsPorEtapa.D.size,
+  };
+
+  const tasa = (numerador: number, denominador: number) =>
+    denominador > 0 ? numerador / denominador : null;
+
+  return {
+    conteos,
+    tasas: {
+      MSR: tasa(conteos.MS, conteos.A),
+      PRR: tasa(conteos.B, conteos.MS),
+      CSR: tasa(conteos.C, conteos.B),
+      ABR: tasa(conteos.D, conteos.C),
+    },
+  };
+}
+
+type Periodo = "lifetime" | "mensual" | "trimestral" | "semestral" | "anual" | "rango";
+
+// Resuelve [desde, hasta] del periodo actual y una ventana anterior de
+// igual duracion (evita comparar periodos de distinta longitud a mitad de
+// mes/trimestre/etc). "lifetime" no tiene ventana anterior.
+function resolverVentana(periodo: Periodo, desdeInput?: Date, hastaInput?: Date) {
+  const ahora = new Date();
+
+  if (periodo === "lifetime") {
+    return { desde: null as Date | null, hasta: ahora, desdeAnterior: null as Date | null, hastaAnterior: null as Date | null };
+  }
+
+  let desde: Date;
+  let hasta: Date;
+
+  if (periodo === "rango") {
+    if (!desdeInput) throw new Error("El periodo 'rango' requiere 'desde'");
+    desde = new Date(desdeInput);
+    desde.setHours(0, 0, 0, 0);
+    hasta = hastaInput ? new Date(hastaInput) : new Date(ahora);
+    hasta.setHours(23, 59, 59, 999);
+  } else {
+    const hoy = new Date(ahora);
+    hoy.setHours(0, 0, 0, 0);
+    if (periodo === "mensual") {
+      desde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    } else if (periodo === "trimestral") {
+      const inicioTrimestre = Math.floor(hoy.getMonth() / 3) * 3;
+      desde = new Date(hoy.getFullYear(), inicioTrimestre, 1);
+    } else if (periodo === "semestral") {
+      const inicioSemestre = hoy.getMonth() < 6 ? 0 : 6;
+      desde = new Date(hoy.getFullYear(), inicioSemestre, 1);
+    } else {
+      desde = new Date(hoy.getFullYear(), 0, 1);
+    }
+    hasta = ahora;
+  }
+
+  const duracionMs = hasta.getTime() - desde.getTime();
+  const hastaAnterior = new Date(desde.getTime() - 1);
+  const desdeAnterior = new Date(hastaAnterior.getTime() - duracionMs);
+
+  return { desde, hasta, desdeAnterior, hastaAnterior };
+}
+
+// leadsNuevos / descartados / agendados son metricas de flujo — cuentan
+// hechos ocurridos DENTRO del periodo (filtrar y agregar eventos, tal como
+// pide la Nota tecnica).
+function flowKpis(eventosDelPeriodo: { tipo: string; leadId: number; payload: unknown }[]) {
+  const nuevos = new Set(
+    eventosDelPeriodo.filter((e) => e.tipo === "LEAD_CREADO").map((e) => e.leadId),
+  ).size;
+  const descartados = new Set(
+    eventosDelPeriodo.filter((e) => e.tipo === "LEAD_DESCARTADO").map((e) => e.leadId),
+  ).size;
+  const agendados = new Set(
+    eventosDelPeriodo
+      .filter((e) => e.tipo === "ESTADO_CAMBIADO" && (e.payload as { estado_nuevo: string }).estado_nuevo === "D")
+      .map((e) => e.leadId),
+  ).size;
+  return { leadsNuevos: nuevos, descartados, agendados };
+}
+
+async function contarEventosLead(
+  db: ReturnType<typeof getDb>,
+  tipo: "LEAD_CREADO" | "LEAD_DESCARTADO",
+  hasta: Date | null,
+) {
+  const condiciones = [eq(eventos.tipo, tipo)];
+  if (hasta) condiciones.push(lte(eventos.timestamp, hasta));
+  const [{ total }] = await db
+    .select({ total: count() })
+    .from(eventos)
+    .where(and(...condiciones));
+  return total;
+}
+
+// "activos" es un snapshot al cierre del periodo (no un conteo de flujo):
+// leads creados hasta esa fecha que no estaban descartados en esa fecha.
+// LEAD_CREADO y LEAD_DESCARTADO ocurren a lo sumo una vez por lead, asi que
+// la resta de counts es exacta sin necesitar DISTINCT.
+async function activosAlCorte(db: ReturnType<typeof getDb>, hasta: Date | null) {
+  const [creados, descartados] = await Promise.all([
+    contarEventosLead(db, "LEAD_CREADO", hasta),
+    contarEventosLead(db, "LEAD_DESCARTADO", hasta),
+  ]);
+  return creados - descartados;
+}
+
+// ─── Sprint 3, punto 2: historico y comparacion por periodo ─────────────
+//
+// resolverVentana (arriba) da UN punto de comparacion (actual vs. ventana
+// anterior de igual duracion) — sirve para "¿mejoro respecto al periodo
+// pasado?". Este bloque es distinto a proposito: genera una SERIE de N
+// unidades calendario completas (no ventanas de igual duracion corridas
+// hacia atras, que no tienen sentido de calendario mas alla de 2 puntos).
+// No toca resolverVentana ni el procedimiento dashboardEjecutivo.
+
+type GranularidadHistorico = "mensual" | "trimestral" | "semestral" | "anual";
+
+const MESES_POR_UNIDAD: Record<GranularidadHistorico, number> = {
+  mensual: 1,
+  trimestral: 3,
+  semestral: 6,
+  anual: 12,
+};
+
+const CANTIDAD_BUCKETS_HISTORICO = 6;
+
+function inicioDeUnidad(totalMeses: number): Date {
+  const anio = Math.floor(totalMeses / 12);
+  const mes = ((totalMeses % 12) + 12) % 12;
+  return new Date(anio, mes, 1);
+}
+
+// Genera `cantidad` buckets calendario consecutivos, del mas viejo al mas
+// nuevo. El mas nuevo queda parcial (termina "ahora", como resolverVentana);
+// los anteriores son unidades calendario completas y cerradas.
+function resolverBucketsCalendario(granularidad: GranularidadHistorico, cantidad: number) {
+  const ahora = new Date();
+  const m = MESES_POR_UNIDAD[granularidad];
+  const totalMesesActual = ahora.getFullYear() * 12 + ahora.getMonth();
+  const inicioUnidadActual = Math.floor(totalMesesActual / m) * m;
+
+  const buckets: { desde: Date; hasta: Date; esActual: boolean }[] = [];
+  for (let i = cantidad - 1; i >= 0; i--) {
+    const inicioMeses = inicioUnidadActual - i * m;
+    const desde = inicioDeUnidad(inicioMeses);
+    const esActual = i === 0;
+    const hasta = esActual ? ahora : new Date(inicioDeUnidad(inicioMeses + m).getTime() - 1);
+    buckets.push({ desde, hasta, esActual });
+  }
+  return buckets;
 }
 
 export const eventRouter = createRouter({
@@ -236,7 +413,8 @@ export const eventRouter = createRouter({
 
   // Sprint 2, punto 2: embudo general con tasas de conversion entre etapas
   // consecutivas (MSR, PRR, CSR, ABR), calculado leyendo el Event Log —
-  // ningun conteo ni tasa se guarda como dato.
+  // ningun conteo ni tasa se guarda como dato. Sprint 3 reutiliza la misma
+  // matematica (calcularEmbudo) para la version acotada por periodo.
   embudo: adminQuery.query(async () => {
     const db = getDb();
 
@@ -244,37 +422,149 @@ export const eventRouter = createRouter({
       where: eq(eventos.tipo, "ESTADO_CAMBIADO"),
     });
 
-    const leadsPorEtapa: Record<string, Set<number>> = {
-      A: new Set(),
-      MS: new Set(),
-      B: new Set(),
-      C: new Set(),
-      D: new Set(),
-    };
-    for (const ev of cambiosEstado) {
-      const estadoNuevo = (ev.payload as { estado_nuevo: string }).estado_nuevo;
-      leadsPorEtapa[estadoNuevo]?.add(ev.leadId);
-    }
-
-    const conteos = {
-      A: leadsPorEtapa.A.size,
-      MS: leadsPorEtapa.MS.size,
-      B: leadsPorEtapa.B.size,
-      C: leadsPorEtapa.C.size,
-      D: leadsPorEtapa.D.size,
-    };
-
-    const tasa = (numerador: number, denominador: number) =>
-      denominador > 0 ? numerador / denominador : null;
-
-    return {
-      conteos,
-      tasas: {
-        MSR: tasa(conteos.MS, conteos.A),
-        PRR: tasa(conteos.B, conteos.MS),
-        CSR: tasa(conteos.C, conteos.B),
-        ABR: tasa(conteos.D, conteos.C),
-      },
-    };
+    return calcularEmbudo(cambiosEstado);
   }),
+
+  // Sprint 3, punto 1: dashboard ejecutivo — KPIs y embudo acotados a un
+  // periodo, con comparacion contra una ventana anterior de igual duracion.
+  dashboardEjecutivo: adminQuery
+    .input(
+      z.object({
+        periodo: z.enum(["lifetime", "mensual", "trimestral", "semestral", "anual", "rango"]),
+        desde: z.coerce.date().optional(),
+        hasta: z.coerce.date().optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const db = getDb();
+      const ventana = resolverVentana(input.periodo, input.desde, input.hasta);
+      const tieneAnterior = ventana.desdeAnterior !== null && ventana.hastaAnterior !== null;
+
+      const condiciones = [
+        inArray(eventos.tipo, ["LEAD_CREADO", "LEAD_DESCARTADO", "ESTADO_CAMBIADO"]),
+        lte(eventos.timestamp, ventana.hasta),
+      ];
+      if (ventana.desdeAnterior) {
+        condiciones.push(gte(eventos.timestamp, ventana.desdeAnterior));
+      }
+
+      const todosLosEventos = await db.query.eventos.findMany({
+        where: and(...condiciones),
+      });
+
+      const dentroDe = (ev: (typeof todosLosEventos)[number], desde: Date | null, hasta: Date) =>
+        (!desde || ev.timestamp >= desde) && ev.timestamp <= hasta;
+
+      const eventosActual = todosLosEventos.filter((e) => dentroDe(e, ventana.desde, ventana.hasta));
+      const eventosAnterior = tieneAnterior
+        ? todosLosEventos.filter((e) => dentroDe(e, ventana.desdeAnterior, ventana.hastaAnterior!))
+        : [];
+
+      const [activosActual, activosAnterior] = await Promise.all([
+        activosAlCorte(db, ventana.hasta),
+        tieneAnterior ? activosAlCorte(db, ventana.hastaAnterior!) : Promise.resolve(null),
+      ]);
+
+      const kpisActual = { ...flowKpis(eventosActual), activos: activosActual };
+      const kpisAnterior = tieneAnterior
+        ? { ...flowKpis(eventosAnterior), activos: activosAnterior as number }
+        : null;
+
+      const embudoActual = calcularEmbudo(eventosActual.filter((e) => e.tipo === "ESTADO_CAMBIADO"));
+      const embudoAnterior = tieneAnterior
+        ? calcularEmbudo(eventosAnterior.filter((e) => e.tipo === "ESTADO_CAMBIADO"))
+        : null;
+
+      // Cuello de botella: tasa mas baja del periodo actual + su tendencia
+      // contra el periodo anterior.
+      let claveMinima: keyof typeof embudoActual.tasas | null = null;
+      let valorMinimo = Infinity;
+      for (const clave of ["MSR", "PRR", "CSR", "ABR"] as const) {
+        const valor = embudoActual.tasas[clave];
+        if (valor !== null && valor < valorMinimo) {
+          valorMinimo = valor;
+          claveMinima = clave;
+        }
+      }
+
+      let tendenciaCuelloDeBotella: "mejora" | "empeora" | "estable" | "sin_datos_previos" | null = null;
+      let valorAnteriorCuelloDeBotella: number | null = null;
+      if (claveMinima) {
+        valorAnteriorCuelloDeBotella = embudoAnterior?.tasas[claveMinima] ?? null;
+        if (valorAnteriorCuelloDeBotella === null) {
+          tendenciaCuelloDeBotella = "sin_datos_previos";
+        } else {
+          const delta = valorMinimo - valorAnteriorCuelloDeBotella;
+          tendenciaCuelloDeBotella = Math.abs(delta) < 0.01 ? "estable" : delta > 0 ? "mejora" : "empeora";
+        }
+      }
+
+      return {
+        ventana: {
+          desde: ventana.desde,
+          hasta: ventana.hasta,
+          desdeAnterior: ventana.desdeAnterior,
+          hastaAnterior: ventana.hastaAnterior,
+        },
+        kpis: { actual: kpisActual, anterior: kpisAnterior },
+        embudo: { actual: embudoActual, anterior: embudoAnterior },
+        cuelloDeBotella: claveMinima && {
+          key: claveMinima,
+          valorActual: valorMinimo,
+          valorAnterior: valorAnteriorCuelloDeBotella,
+          tendencia: tendenciaCuelloDeBotella,
+        },
+      };
+    }),
+
+  // Sprint 3, punto 2: serie historica de N periodos calendario, para leer
+  // tendencia (no solo un salto actual-vs-anterior). Reutiliza calcularEmbudo
+  // y flowKpis sin cambios — solo cambia que arreglo de eventos se les pasa.
+  dashboardHistorico: adminQuery
+    .input(
+      z.object({
+        granularidad: z.enum(["mensual", "trimestral", "semestral", "anual"]),
+      }),
+    )
+    .query(async ({ input }) => {
+      const db = getDb();
+      const buckets = resolverBucketsCalendario(input.granularidad, CANTIDAD_BUCKETS_HISTORICO);
+      const desdeGlobal = buckets[0].desde;
+      const hastaGlobal = buckets[buckets.length - 1].hasta;
+
+      const [todosLosEventos, activosBase] = await Promise.all([
+        db.query.eventos.findMany({
+          where: and(
+            inArray(eventos.tipo, ["LEAD_CREADO", "LEAD_DESCARTADO", "ESTADO_CAMBIADO"]),
+            gte(eventos.timestamp, desdeGlobal),
+            lte(eventos.timestamp, hastaGlobal),
+          ),
+        }),
+        activosAlCorte(db, new Date(desdeGlobal.getTime() - 1)),
+      ]);
+
+      // "activos" se acumula bucket a bucket desde el snapshot base — evita
+      // 2 queries de COUNT por bucket (ver Nota tecnica: una sola consulta
+      // acotada, no N escaneos del Event Log).
+      let activosCorrido = activosBase;
+
+      const serie = buckets.map((b) => {
+        const eventosBucket = todosLosEventos.filter(
+          (e) => e.timestamp >= b.desde && e.timestamp <= b.hasta,
+        );
+        const kpisFlujo = flowKpis(eventosBucket);
+        activosCorrido += kpisFlujo.leadsNuevos - kpisFlujo.descartados;
+        const embudo = calcularEmbudo(eventosBucket.filter((e) => e.tipo === "ESTADO_CAMBIADO"));
+
+        return {
+          desde: b.desde,
+          hasta: b.hasta,
+          esActual: b.esActual,
+          kpis: { ...kpisFlujo, activos: activosCorrido },
+          embudo,
+        };
+      });
+
+      return { granularidad: input.granularidad, serie };
+    }),
 });
