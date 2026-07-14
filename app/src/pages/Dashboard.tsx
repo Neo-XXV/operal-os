@@ -136,6 +136,17 @@ export default function Dashboard() {
     { enabled: isAdmin && esGranularidadHistorico(periodo) },
   );
 
+  // Sprint 3, punto 3: comparacion por setter — respeta el mismo periodo
+  // que el resto del dashboard (misma logica de habilitacion que dashboardEjecutivo).
+  const { data: porSetter } = trpc.event.embudoPorSetter.useQuery(
+    {
+      periodo: periodo as "lifetime" | "mensual" | "trimestral" | "semestral" | "anual" | "rango",
+      desde: periodo === "rango" && rangoDesde ? new Date(rangoDesde) : undefined,
+      hasta: periodo === "rango" && rangoHasta ? new Date(rangoHasta) : undefined,
+    },
+    { enabled: queryHabilitada },
+  );
+
   // Sprint 2: la tabla de leads es el centro operativo del setter — no un
   // dashboard de KPIs al que se llega navegando.
   if (isSetter) {
@@ -480,6 +491,79 @@ export default function Dashboard() {
                     ))}
                   </LineChart>
                 </ChartContainer>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Comparacion por setter — Sprint 3, punto 3 */}
+        {isAdmin && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Comparación por setter</CardTitle>
+              <p className="text-sm text-slate-500">
+                Conversión de cada setter en el período seleccionado — cada transición se atribuye a
+                quien tenía el lead asignado en ese momento, no al dueño actual
+              </p>
+            </CardHeader>
+            <CardContent>
+              {!porSetter ? (
+                <p className="text-sm text-slate-500 py-8 text-center">Calculando...</p>
+              ) : porSetter.setters.length === 0 ? (
+                <p className="text-sm text-slate-500 py-8 text-center">No hay setters registrados.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <th className="text-left p-3 font-medium text-slate-500">Setter</th>
+                        {TRANSICIONES.map((t) => (
+                          <th key={t.key} className="text-right p-3 font-medium text-slate-500">
+                            {t.key}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {porSetter.setters.map((s) => (
+                        <tr
+                          key={s.id}
+                          className={`border-b border-slate-100 ${!s.activo ? "text-slate-400" : ""}`}
+                        >
+                          <td className="p-3 font-medium">
+                            {s.nombre}
+                            {!s.activo && <span className="text-xs ml-2 font-normal">(inactivo)</span>}
+                          </td>
+                          {TRANSICIONES.map((t) => {
+                            const valor = s.tasas[t.key];
+                            const valorEquipo = dashboard?.embudo.actual.tasas[t.key] ?? null;
+                            const esDebil =
+                              s.activo &&
+                              t.key === cuelloDeBotella?.key &&
+                              valor !== null &&
+                              valorEquipo !== null &&
+                              valor < valorEquipo;
+                            return (
+                              <td
+                                key={t.key}
+                                className={`text-right p-3 tabular-nums ${
+                                  esDebil ? "bg-amber-50 text-amber-700 font-semibold" : "text-slate-700"
+                                }`}
+                                title={
+                                  valor !== null && valor > 1
+                                    ? "Puede superar 100%: cuenta leads que llegaron a esta etapa con este setter, aunque hayan llegado a la etapa anterior con otro (reasignación en el medio)."
+                                    : undefined
+                                }
+                              >
+                                {formatPct(valor)}
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </CardContent>
           </Card>

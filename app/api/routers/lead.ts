@@ -206,9 +206,13 @@ async function obtenerProyeccionesLote(
   const resultado = new Map<number, Proyeccion>();
   if (leadIds.length === 0) return resultado;
 
+  // timestamp de MySQL tiene resolucion de 1 segundo — la carga rapida y los
+  // seguimientos en lote generan varios eventos en el mismo segundo como
+  // flujo normal. Desempatar por id (orden real de insercion) o "el ultimo
+  // evento" no es deterministico.
   const todosLosEventos = await db.query.eventos.findMany({
     where: inArray(eventos.leadId, leadIds),
-    orderBy: [desc(eventos.timestamp)],
+    orderBy: [desc(eventos.timestamp), desc(eventos.id)],
   });
 
   const porLead = new Map<number, typeof todosLosEventos>();

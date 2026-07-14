@@ -1,13 +1,18 @@
 import { z } from "zod";
 import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
-import { leads, eventos } from "@db/schema";
+import { leads, eventos, users } from "@db/schema";
 import { eq, desc, and, gte, lte, inArray, count } from "drizzle-orm";
 
+// timestamp de MySQL tiene resolucion de 1 segundo — la carga rapida (Enter,
+// Enter, Enter) y los seguimientos en lote (Sprint 2) generan varios eventos
+// en el mismo segundo como flujo normal, no como caso borde. Desempatar SIEMPRE
+// por id (autoincremental, refleja el orden real de insercion) o el "ultimo
+// evento" no es deterministico.
 async function verificarLeadActivo(db: ReturnType<typeof getDb>, leadId: number) {
   const descarte = await db.query.eventos.findFirst({
     where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "LEAD_DESCARTADO")),
-    orderBy: [desc(eventos.timestamp)],
+    orderBy: [desc(eventos.timestamp), desc(eventos.id)],
   });
   if (descarte) throw new Error("El lead esta descartado. No se pueden registrar nuevos eventos.");
 }
@@ -15,7 +20,7 @@ async function verificarLeadActivo(db: ReturnType<typeof getDb>, leadId: number)
 async function obtenerSetterActual(db: ReturnType<typeof getDb>, leadId: number) {
   const ultimaAsignacion = await db.query.eventos.findFirst({
     where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "LEAD_ASIGNADO")),
-    orderBy: [desc(eventos.timestamp)],
+    orderBy: [desc(eventos.timestamp), desc(eventos.id)],
   });
   return ultimaAsignacion
     ? (ultimaAsignacion.payload as { setter_nuevo: number }).setter_nuevo
@@ -40,7 +45,7 @@ function validarTransicion(anterior: string | null, nuevo: string) {
 async function obtenerEstadoActual(db: ReturnType<typeof getDb>, leadId: number) {
   const ultimo = await db.query.eventos.findFirst({
     where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "ESTADO_CAMBIADO")),
-    orderBy: [desc(eventos.timestamp)],
+    orderBy: [desc(eventos.timestamp), desc(eventos.id)],
   });
   return ultimo
     ? (ultimo.payload as { estado_nuevo: string }).estado_nuevo
@@ -233,6 +238,60 @@ function resolverBucketsCalendario(granularidad: GranularidadHistorico, cantidad
   return buckets;
 }
 
+// ─── Sprint 3, punto 3: comparacion por setter ───────────────────────────
+//
+// Atribucion por intervalo de tiempo: reconstruye, por lead, la linea de
+// tiempo de sus LEAD_ASIGNADO (ordenados por timestamp), y clasifica cada
+// ESTADO_CAMBIADO segun quien tenia el lead asignado en ese instante exacto
+// — no segun el dueno actual. Intervalo cerrado-abierto: un ESTADO_CAMBIADO
+// con timestamp igual al de una asignacion se atribuye al nuevo dueno.
+// Un lead sin ninguna asignacion queda excluido de toda atribucion (mismo
+// criterio que setterActual: null en el resto del codigo). El resultado se
+// le pasa a calcularEmbudo sin cambios, mismo patron que dashboardEjecutivo
+// y dashboardHistorico.
+function construirAsignacionPorSetter(
+  cambiosEstado: { leadId: number; timestamp: Date; payload: unknown }[],
+  asignaciones: { id: number; leadId: number; timestamp: Date; payload: unknown }[],
+): Map<number, { leadId: number; payload: unknown }[]> {
+  const asignacionesPorLead = new Map<number, { setterId: number; desde: Date; id: number }[]>();
+  for (const ev of asignaciones) {
+    const setterId = (ev.payload as { setter_nuevo: number }).setter_nuevo;
+    const entrada = { setterId, desde: ev.timestamp, id: ev.id };
+    const lista = asignacionesPorLead.get(ev.leadId);
+    if (lista) lista.push(entrada);
+    else asignacionesPorLead.set(ev.leadId, [entrada]);
+  }
+  // Desempate por id: dos LEAD_ASIGNADO del mismo lead en el mismo segundo
+  // (posible, aunque menos frecuente que en la carga rapida) deben quedar en
+  // el orden real de insercion, no en el orden arbitrario que devuelva la DB.
+  for (const lista of asignacionesPorLead.values()) {
+    lista.sort((a, b) => a.desde.getTime() - b.desde.getTime() || a.id - b.id);
+  }
+
+  const resultado = new Map<number, { leadId: number; payload: unknown }[]>();
+  for (const ev of cambiosEstado) {
+    const intervalos = asignacionesPorLead.get(ev.leadId);
+    if (!intervalos) continue;
+
+    let dueno: number | null = null;
+    for (const intervalo of intervalos) {
+      if (intervalo.desde.getTime() <= ev.timestamp.getTime()) {
+        dueno = intervalo.setterId;
+      } else {
+        break;
+      }
+    }
+    if (dueno === null) continue;
+
+    const entrada = { leadId: ev.leadId, payload: ev.payload };
+    const lista = resultado.get(dueno);
+    if (lista) lista.push(entrada);
+    else resultado.set(dueno, [entrada]);
+  }
+
+  return resultado;
+}
+
 export const eventRouter = createRouter({
   create: authedQuery
     .input(
@@ -350,7 +409,7 @@ export const eventRouter = createRouter({
 
       return db.query.eventos.findMany({
         where: eq(eventos.leadId, input.leadId),
-        orderBy: [desc(eventos.timestamp)],
+        orderBy: [desc(eventos.timestamp), desc(eventos.id)],
         with: { actor: true },
       });
     }),
@@ -369,7 +428,7 @@ export const eventRouter = createRouter({
 
       if (ctx.user.rol === "SETTER") {
         const allEvents = await db.query.eventos.findMany({
-          orderBy: [desc(eventos.timestamp)],
+          orderBy: [desc(eventos.timestamp), desc(eventos.id)],
           with: { lead: true, actor: true },
         });
 
@@ -396,7 +455,7 @@ export const eventRouter = createRouter({
       if (conditions.length > 0) {
         return db.query.eventos.findMany({
           where: and(...conditions),
-          orderBy: [desc(eventos.timestamp)],
+          orderBy: [desc(eventos.timestamp), desc(eventos.id)],
           limit: input?.limit ?? 50,
           offset: input?.offset ?? 0,
           with: { lead: true, actor: true },
@@ -404,7 +463,7 @@ export const eventRouter = createRouter({
       }
 
       return db.query.eventos.findMany({
-        orderBy: [desc(eventos.timestamp)],
+        orderBy: [desc(eventos.timestamp), desc(eventos.id)],
         limit: input?.limit ?? 50,
         offset: input?.offset ?? 0,
         with: { lead: true, actor: true },
@@ -566,5 +625,65 @@ export const eventRouter = createRouter({
       });
 
       return { granularidad: input.granularidad, serie };
+    }),
+
+  // Sprint 3, punto 3: comparacion por setter. Atribucion por INTERVALO DE
+  // TIEMPO — cada ESTADO_CAMBIADO se atribuye a quien tenia el lead asignado
+  // en el momento exacto de esa transicion (no al dueno actual), porque los
+  // leads se reasignan (02_reglas_de_negocio: "la agencia rota setters
+  // constantemente") y atribuir todo al dueno de hoy le daria/quitaria
+  // credito por trabajo que no hizo. Documentado tambien en
+  // 03_catalogo_eventos.md junto a la regla de "setter actual".
+  embudoPorSetter: adminQuery
+    .input(
+      z.object({
+        periodo: z.enum(["lifetime", "mensual", "trimestral", "semestral", "anual", "rango"]),
+        desde: z.coerce.date().optional(),
+        hasta: z.coerce.date().optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const db = getDb();
+      const ventana = resolverVentana(input.periodo, input.desde, input.hasta);
+
+      const condicionesEstado = [eq(eventos.tipo, "ESTADO_CAMBIADO"), lte(eventos.timestamp, ventana.hasta)];
+      if (ventana.desde) condicionesEstado.push(gte(eventos.timestamp, ventana.desde));
+
+      const cambiosEstado = await db.query.eventos.findMany({
+        where: and(...condicionesEstado),
+      });
+
+      const leadIdsEnPeriodo = [...new Set(cambiosEstado.map((e) => e.leadId))];
+
+      // LEAD_ASIGNADO se trae SIN acotar por fecha: un intervalo de dueño que
+      // arranco antes del periodo pero sigue abierto necesita su historial
+      // completo para resolverse bien.
+      const [asignaciones, setters] = await Promise.all([
+        leadIdsEnPeriodo.length > 0
+          ? db.query.eventos.findMany({
+              where: and(eq(eventos.tipo, "LEAD_ASIGNADO"), inArray(eventos.leadId, leadIdsEnPeriodo)),
+            })
+          : Promise.resolve([]),
+        db.query.users.findMany({
+          where: eq(users.rol, "SETTER"),
+          columns: { id: true, nombre: true, activo: true },
+        }),
+      ]);
+
+      const eventosPorSetter = construirAsignacionPorSetter(cambiosEstado, asignaciones);
+
+      // Se incluyen todos los setters, incluidos inactivos y los que no
+      // tuvieron actividad en el periodo — esa ausencia es informacion.
+      const setterStats = setters.map((s) => ({
+        id: s.id,
+        nombre: s.nombre,
+        activo: s.activo,
+        ...calcularEmbudo(eventosPorSetter.get(s.id) ?? []),
+      }));
+
+      return {
+        ventana: { desde: ventana.desde, hasta: ventana.hasta },
+        setters: setterStats,
+      };
     }),
 });

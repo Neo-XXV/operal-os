@@ -84,6 +84,8 @@ Este catálogo cubre exclusivamente **eventos del Lead** — hechos que ocurren 
 
 **Reglas:** El setter "actual" de un lead se deriva leyendo el último `LEAD_ASIGNADO`, nunca se guarda como campo separado de estado.
 
+**Atribución histórica por setter (Sprint 3, comparación por setter):** cuando se mide el rendimiento de conversión de cada setter, un `ESTADO_CAMBIADO` no se atribuye al dueño *actual* del lead, sino a quien tenía el lead asignado en el momento exacto en que ocurrió esa transición — reconstruyendo la línea de tiempo de `LEAD_ASIGNADO` del lead (intervalo cerrado-abierto: un cambio de estado con timestamp igual al de una asignación se atribuye al nuevo dueño). Esto es necesario porque los leads se reasignan en cualquier momento (ver `02_reglas_de_negocio.md`); atribuir todo el historial al dueño actual le daría o quitaría crédito por trabajo que no hizo. Un lead que nunca tuvo `LEAD_ASIGNADO` queda excluido de toda atribución por setter.
+
 **Dispara:** Tiempo entre asignación y primer contacto (`primer_mensaje`), carga de trabajo por setter, historial de reasignaciones.
 
 ---
