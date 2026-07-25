@@ -28,8 +28,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Card, CardContent } from "@/components/ui/card";
-import { Plus, Search, ExternalLink, ArrowRight, XCircle } from "lucide-react";
+import { Plus, Search, ExternalLink, ArrowRight, XCircle, UserCog } from "lucide-react";
 
 const MOTIVOS_DESCARTE = [
   { value: "SIN_RESPUESTA", label: "Sin respuesta" },
@@ -412,6 +422,13 @@ function VistaAdmin() {
   const [setterId, setSetterId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
+  const [reasignando, setReasignando] = useState<{
+    leadId: number;
+    nombreLead: string;
+    setterActualNombre: string;
+    setterNuevoId: number;
+    setterNuevoNombre: string;
+  } | null>(null);
 
   const createLead = trpc.lead.create.useMutation({
     onSuccess: () => {
@@ -424,6 +441,24 @@ function VistaAdmin() {
     },
     onError: (err) => setError(err.message),
   });
+
+  const assignLead = trpc.lead.assign.useMutation({
+    onSuccess: () => {
+      utils.lead.list.invalidate();
+      if (reasignando) toast.success(`${reasignando.nombreLead} reasignado a ${reasignando.setterNuevoNombre}`);
+      setReasignando(null);
+    },
+    onError: (err) => {
+      toast.error(err.message);
+      setReasignando(null);
+    },
+  });
+
+  // "activo" viene del row completo que user.setters ya trae — no se filtra
+  // en el backend (ver auditoria), asi que se filtra aca para no ofrecer
+  // reasignar a un setter desactivado.
+  const settersActivos = setters?.filter((s) => s.activo) ?? [];
+  const nombrePorSetterId = new Map((setters ?? []).map((s) => [s.id, s.nombre]));
 
   const filteredLeads = leads?.filter((l) => {
     const q = search.toLowerCase();
@@ -565,6 +600,12 @@ function VistaAdmin() {
                       <p className="text-sm text-slate-500">
                         @{lead.instagramUsername}
                       </p>
+                      <p className="text-xs text-slate-400 mt-0.5">
+                        Asignado a:{" "}
+                        {lead.setterActual
+                          ? nombrePorSetterId.get(lead.setterActual) ?? `ID ${lead.setterActual}`
+                          : "Sin asignar"}
+                      </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -581,6 +622,43 @@ function VistaAdmin() {
                         {lead.motivoDescarte}
                       </span>
                     )}
+                    {isAdmin && !lead.descartado && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button size="sm" variant="ghost" title="Reasignar">
+                              <UserCog className="w-4 h-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {settersActivos.filter((s) => s.id !== lead.setterActual).length === 0 ? (
+                              <DropdownMenuItem disabled>No hay otros setters activos</DropdownMenuItem>
+                            ) : (
+                              settersActivos
+                                .filter((s) => s.id !== lead.setterActual)
+                                .map((s) => (
+                                  <DropdownMenuItem
+                                    key={s.id}
+                                    onClick={() =>
+                                      setReasignando({
+                                        leadId: lead.id,
+                                        nombreLead: lead.nombre,
+                                        setterActualNombre: lead.setterActual
+                                          ? nombrePorSetterId.get(lead.setterActual) ?? `ID ${lead.setterActual}`
+                                          : "sin asignar",
+                                        setterNuevoId: s.id,
+                                        setterNuevoNombre: s.nombre,
+                                      })
+                                    }
+                                  >
+                                    {s.nombre}
+                                  </DropdownMenuItem>
+                                ))
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                    )}
                     <ExternalLink className="w-4 h-4 text-slate-300" />
                   </div>
                 </div>
@@ -589,6 +667,32 @@ function VistaAdmin() {
           ))}
         </div>
       )}
+
+      <AlertDialog open={!!reasignando} onOpenChange={(o) => !o && setReasignando(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reasignar lead</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Reasignar <strong>{reasignando?.nombreLead}</strong> de{" "}
+              <strong>{reasignando?.setterActualNombre}</strong> a{" "}
+              <strong>{reasignando?.setterNuevoNombre}</strong>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={assignLead.isPending}
+              onClick={() => {
+                if (reasignando) {
+                  assignLead.mutate({ leadId: reasignando.leadId, setterId: reasignando.setterNuevoId });
+                }
+              }}
+            >
+              {assignLead.isPending ? "Reasignando..." : "Reasignar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
