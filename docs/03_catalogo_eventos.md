@@ -30,7 +30,7 @@ Evento
   id
   tipo          (ej: ESTADO_CAMBIADO)
   lead_id       (solo para eventos de Lead — ver sección de alcance)
-  actor_tipo    (SETTER | MANAGER | SISTEMA)
+  actor_tipo    (SETTER | MANAGER | ADMIN | SISTEMA)
   actor_id
   timestamp
   payload       (JSON, forma según el tipo — definida abajo)
@@ -107,6 +107,8 @@ Este catálogo cubre exclusivamente **eventos del Lead** — hechos que ocurren 
 ```
 
 **Reglas:** D (agenda confirmada) es el estado final exitoso del ciclo dentro de OPERAL — el lead permanece en el sistema, no migra a otra herramienta.
+
+**Payload opcional `aproximada: true`:** presente únicamente en eventos generados por importaciones históricas cuando la fecha real de la transición no está disponible en la fuente y se usa un fallback (ver `scripts/importar-crm/`); ausente en todo evento generado por el flujo normal de la app. Distingue fecha medida de fecha estimada para no tratarlas igual en análisis futuros.
 
 **Dispara:** MSR, PRR, CSR, ABR, tiempo entre etapas, embudo por setter, embudo general.
 
@@ -191,9 +193,9 @@ Taxonomía cerrada (definida con el dueño del negocio):
 
 **Descripción:** El lead deja de trabajarse dentro del proceso comercial por decisión del setter o por aplicación de una regla del negocio. No implica eliminar el lead ni borrar su historial; únicamente marca el fin de su recorrido en el embudo.
 
-**Quién lo genera:** Setter.
+**Quién lo genera:** Setter (fase de embudo, antes de `D`) o Admin (fase de llamada, después de `D` — ver `02_reglas_de_negocio.md` sección 7). El setter no tiene participación en la fase de llamada, así que un descarte ahí solo puede venir del closer.
 
-**Cuándo ocurre:** Cuando el lead dice explícitamente que no le interesa, o cuando se superan 4 seguimientos sin respuesta.
+**Cuándo ocurre:** Cuando el lead dice explícitamente que no le interesa, o cuando se superan 4 seguimientos sin respuesta (fase de embudo). En la fase de llamada, cuando el closer determina que el lead no va a avanzar (mismos motivos de la lista, aplicados a lo que pasó en la llamada en vez de en los mensajes) — no hace falta agotar las 3 llamadas para descartar: si el closer decide antes que el lead está muerto, puede descartarlo en cualquier punto.
 
 **Payload:**
 ```json
@@ -203,7 +205,11 @@ Taxonomía cerrada (definida con el dueño del negocio):
 }
 ```
 
-**Reglas:** Después de `LEAD_DESCARTADO` no pueden generarse nuevos eventos comerciales — `SEGUIMIENTO_ENVIADO`, `ESTADO_CAMBIADO`, `RESPUESTA_RECIBIDA`, `OBJECION_REGISTRADA` — para ese lead, salvo que en una versión futura exista una funcionalidad explícita de reapertura. Tampoco puede reasignarse a otro setter (`LEAD_ASIGNADO`): un lead descartado queda cerrado, no se vuelve a trabajar. **Excepción:** `NOTA_AGREGADA` sí puede registrarse después del descarte — es el mecanismo para que el setter deje cualquier explicación de contexto, incluyendo el motivo real detrás del descarte si quiere ampliarlo más allá del campo `motivo` fijo de este evento. Ver `02_reglas_de_negocio.md` para la lista fija de motivos válidos (no se acepta texto libre en `motivo`).
+**Reglas:** Después de `LEAD_DESCARTADO` no pueden generarse nuevos eventos comerciales — `SEGUIMIENTO_ENVIADO`, `ESTADO_CAMBIADO`, `RESPUESTA_RECIBIDA`, `OBJECION_REGISTRADA`, `LLAMADA_REGISTRADA`, `PAGO_REGISTRADO` — para ese lead, salvo que en una versión futura exista una funcionalidad explícita de reapertura. Tampoco puede reasignarse a otro setter (`LEAD_ASIGNADO`): un lead descartado queda cerrado, no se vuelve a trabajar. **Excepción:** `NOTA_AGREGADA` sí puede registrarse después del descarte — es el mecanismo para que el setter deje cualquier explicación de contexto, incluyendo el motivo real detrás del descarte si quiere ampliarlo más allá del campo `motivo` fijo de este evento. Ver `02_reglas_de_negocio.md` para la lista fija de motivos válidos (no se acepta texto libre en `motivo`).
+
+**Interacción con la fase de llamada (Sprint 4):** un lead puede descartarse en cualquier momento de su vida abierta — antes de `D` (por el setter) o después, durante la fase de llamada (por el `ADMIN`), mientras no haya cerrado. Un lead ya **cerrado** (`LLAMADA_REGISTRADA` con `cerro=true`) no puede descartarse — el cierre es terminal, no hay "descartar una venta". Un lead **descartado** no puede recibir una llamada nueva (ver reglas de `LLAMADA_REGISTRADA`). No se agrega un motivo nuevo para descartes originados en la fase de llamada — la lista fija existente (`SIN_RESPUESTA`, `RECHAZO_EXPLICITO`, `NO_CALIFICA`, `DUPLICADO`, `ERROR_CARGA`) ya es genérica por resultado, no por canal, y alcanza sin ampliarse.
+
+**Motivo `HISTORICO` (solo importación histórica, no es un motivo del producto):** usado exclusivamente por `scripts/importar-crm/reconstruir-descartes.ts` para cerrar leads de un CRM cerrado de un setter ya inactivo, donde el Excel origen marcaba el descarte con color (no con un dato) y no registraba motivo ni fecha real. Todo lead importado que no llegó a `D` se considera muerto por abandono; la fecha usada es la del último evento conocido de ese lead, marcada `aproximada: true` (mismo flag que en `ESTADO_CAMBIADO`, ver arriba) porque no es la fecha real del cierre. **No está en la lista de motivos válidos que el backend acepta para descartes generados en operación normal (`event.ts`)** — un setter real nunca puede elegir `HISTORICO` desde la app.
 
 **Dispara:** Tasa de descarte por motivo, tasa de descarte por setter, punto del embudo donde más se pierden leads.
 
@@ -230,6 +236,69 @@ Taxonomía cerrada (definida con el dueño del negocio):
 
 ---
 
+### 9. `LLAMADA_REGISTRADA`
+
+**Descripción:** El closer (rol `ADMIN`) registra el resultado de una llamada de venta con un lead que ya llegó a `D`. Es la unidad básica de la fase de cierre (`06_sprint_4.md`) — un segundo mini-embudo, independiente del embudo A→MS→B→C→D del setter, sobre el mismo lead.
+
+**Quién lo genera:** Admin (no existe rol "closer" separado — ver `02_reglas_de_negocio.md` sección 7).
+
+**Cuándo ocurre:** Después de que ocurre (o se intenta) una llamada agendada con el lead.
+
+**Payload:**
+```json
+{
+  "numero": 1,
+  "se_presento": true,
+  "califico": true,
+  "cerro": false,
+  "monto_cierre": null,
+  "situacion": "texto libre",
+  "notas": "texto libre",
+  "autoevaluacion": "texto libre",
+  "grabacion_url": "opcional"
+}
+```
+
+- `numero`: 1, 2 o 3. Identifica cuál de las hasta 3 llamadas es.
+- `califico`: `null` si `se_presento=false` (no aplica).
+- `cerro`: `null` si `califico` no es `true` (no aplica).
+- `monto_cierre`: solo tiene valor si `cerro=true`.
+
+**Reglas:**
+- ❌ **Solo puede registrarse sobre un lead cuya etapa actual (último `ESTADO_CAMBIADO`) sea exactamente `D`.** Un lead en `A`, `MS`, `B` o `C` rechaza el intento — mismo principio que rechazar un salto de etapa en el embudo original (`02_reglas_de_negocio.md` sección 2). No hay excepción: la fase de llamada no puede "adelantarse" a que el setter complete su parte.
+- `numero` es secuencial y sin saltos: no puede registrarse `numero=2` sin que exista ya `numero=1` para ese lead, ni `numero=3` sin `numero=2` — mismo principio de "no saltar etapas" del embudo original, aplicado a este mini-embudo. Tope estricto: no se acepta `numero=4` o mayor.
+- **Una vez que existe un `LLAMADA_REGISTRADA` con `cerro=true` para un lead, no puede registrarse ninguna llamada nueva para ese lead** — el cierre es terminal, mismo principio que `LEAD_DESCARTADO`. Esto permite que "¿este lead cerró?" sea un lookup directo (existe a lo sumo un evento con `cerro=true` por lead), no una reconstrucción de secuencia.
+- **No puede registrarse sobre un lead con `LEAD_DESCARTADO`** — mismo bloqueo que el resto de los eventos comerciales (ver reglas actualizadas de `LEAD_DESCARTADO` más abajo). Un lead descartado durante la fase de llamada no puede recibir una llamada nueva, así como uno descartado antes de D nunca llega a esta fase.
+- Puede re-registrarse el mismo `numero` como corrección, **solo si esa llamada sigue siendo la más reciente del lead y no cerró** (no hay corrección de una llamada ya superada por la siguiente, ni de un cierre ya registrado) — la proyección toma el evento más reciente de ese `numero`, mismo criterio que el resto del sistema.
+- El resultado de la llamada **no genera ni modifica** eventos `ESTADO_CAMBIADO` — el embudo del setter (A→MS→B→C→D) no se toca.
+- Visible únicamente para `ADMIN` — el `SETTER` no tiene acceso a este evento ni a sus datos.
+
+**Dispara:** Show Up Rate, Close Rate (cerrados/calificados), estado de la fase de llamada por lead, lista de "leads a llamar".
+
+---
+
+### 10. `PAGO_REGISTRADO`
+
+**Descripción:** Se registra un cobro sobre un lead cerrado. El monto total cerrado (`monto_cierre`, en `LLAMADA_REGISTRADA`) puede cobrarse en más de una parte si hay plan de pagos — "cash collected" es la suma de estos eventos, nunca un campo que se edita.
+
+**Quién lo genera:** Admin.
+
+**Cuándo ocurre:** Cada vez que se recibe un pago de un lead ya cerrado.
+
+**Payload:**
+```json
+{
+  "monto": 500,
+  "nota": "opcional"
+}
+```
+
+**Reglas:** Solo puede registrarse sobre un lead con un `LLAMADA_REGISTRADA` de `cerro=true`. El sistema no procesa pagos ni valida montos contra el total del trato — es un registro de dato, no un módulo de cobros (fuera de alcance del Sprint 4, ver `06_sprint_4.md`).
+
+**Dispara:** Cash Collected, AOV (Call Efectiva), AOV (Trato Cerrado).
+
+---
+
 ## Resumen
 
 | # | Evento | Actor típico | ¿Tiene payload variable? |
@@ -242,6 +311,8 @@ Taxonomía cerrada (definida con el dueño del negocio):
 | 6 | `OBJECION_REGISTRADA` | Setter | Sí (tipo, detalle) |
 | 7 | `LEAD_DESCARTADO` | Setter | Sí (motivo) |
 | 8 | `NOTA_AGREGADA` | Setter | Sí (texto) |
+| 9 | `LLAMADA_REGISTRADA` | Admin | Sí (número, resultado, montos) |
+| 10 | `PAGO_REGISTRADO` | Admin | Sí (monto, nota) |
 
 ## Pendiente fuera de este documento
 

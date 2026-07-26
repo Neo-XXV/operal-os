@@ -55,9 +55,10 @@ La entidad central del sistema. Ver `03_catalogo_eventos.md` para el detalle de 
 Evento
   id
   tipo          (LEAD_CREADO | LEAD_ASIGNADO | ESTADO_CAMBIADO | SEGUIMIENTO_ENVIADO |
-                 RESPUESTA_RECIBIDA | OBJECION_REGISTRADA | LEAD_DESCARTADO | NOTA_AGREGADA)
+                 RESPUESTA_RECIBIDA | OBJECION_REGISTRADA | LEAD_DESCARTADO | NOTA_AGREGADA |
+                 LLAMADA_REGISTRADA | PAGO_REGISTRADO)
   lead_id       (FK a Lead)
-  actor_tipo    (SETTER | MANAGER | SISTEMA)
+  actor_tipo    (SETTER | MANAGER | ADMIN | SISTEMA)
   actor_id      (FK a Usuario, nulo si actor_tipo = SISTEMA)
   timestamp
   payload       (JSON cuyo esquema depende del tipo de evento — definido en 03_catalogo_eventos.md)
@@ -71,6 +72,7 @@ Evento
 |---|---|---|
 | `Objecion` | La objeción no tiene ciclo de vida propio, ni relaciones, ni permisos, ni pantalla propia — es solo un dato dentro del payload de `OBJECION_REGISTRADA` | Cuando exista una base de conocimiento de objeciones con respuesta sugerida (entonces el evento pasaría a referenciar `objecion_id` en vez de texto libre) |
 | `Importacion` | No hay necesidad hoy de ver historial de importaciones, deshacerlas o auditar lotes de scraping por separado | Cuando se necesite reimportar, deshacer una importación, o rastrear qué lote generó qué leads |
+| `Llamada` | La llamada (Sprint 4) no tiene ciclo de vida propio más allá de los campos de su payload — es un dato dentro de `LLAMADA_REGISTRADA`, igual que `Objecion`. El "estado de la fase de llamada" de un lead es una proyección calculada, no una fila guardada | Si en el futuro se necesita programar llamadas con anticipación (recordatorios, calendario propio) en vez de solo registrar el resultado post-hoc |
 
 `LEAD_CREADO` guarda un `importacion_id` en su payload como referencia de trazabilidad, pero **no es una foreign key real** en V1 — es solo un dato de contexto, no una relación con una tabla `Importacion` (que no existe todavía).
 
@@ -105,6 +107,9 @@ Estas son ejemplos de vistas derivadas que el sistema va a necesitar calcular fr
 - **Leads activos de un setter:** leads cuyo último evento de asignación corresponde al setter consultado y que no poseen un evento `LEAD_DESCARTADO`. *(Nota: esta condición es absoluta — si en el futuro se implementa reapertura de leads descartados, hay que revisar esta consulta, porque tal como está excluiría para siempre a cualquier lead reabierto.)*
 - **KPIs (MSR, PRR, CSR, ABR):** calculados contando transiciones de `ESTADO_CAMBIADO` en un rango de fechas.
 - **Timeline completo de un lead:** todos los eventos de ese `lead_id`, ordenados por `timestamp`.
+- **¿Un lead cerró? (Sprint 4):** existe un `LLAMADA_REGISTRADA` con `cerro=true` para ese lead. Gracias a la regla de que el cierre es terminal (ver `03_catalogo_eventos.md`), es un lookup directo — a lo sumo un evento así por lead, no hay que reconstruir la secuencia de llamadas.
+- **Estado de la fase de llamada de un lead (Sprint 4):** `PENDIENTE_LLAMAR` (llegó a D, cero llamadas) / `PENDIENTE_REAGENDA` (la última llamada no cerró y quedan intentos) / `CERRADO` / `PERDIDO` (se usaron las 3 llamadas sin cerrar) — derivado del conjunto de `LLAMADA_REGISTRADA` de ese lead, análogo a "etapa actual" pero para el mini-embudo del closer.
+- **Cash collected de un lead (Sprint 4):** suma de los montos de todos los `PAGO_REGISTRADO` de ese lead.
 
 Si el volumen de datos lo justifica más adelante, estas consultas pueden optimizarse con vistas materializadas — pero siguen siendo proyecciones, nunca la fuente de verdad.
 
