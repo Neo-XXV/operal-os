@@ -248,21 +248,25 @@ Taxonomía cerrada (definida con el dueño del negocio):
 ```json
 {
   "numero": 1,
+  "fecha_call": "2026-07-24",
   "se_presento": true,
   "califico": true,
-  "cerro": false,
-  "monto_cierre": null,
+  "cerro": true,
+  "monto_cierre": 250000,
+  "moneda": "USD",
   "situacion": "texto libre",
   "notas": "texto libre",
   "autoevaluacion": "texto libre",
-  "grabacion_url": "opcional"
+  "grabacion_url": "https://..."
 }
 ```
 
 - `numero`: 1, 2 o 3. Identifica cuál de las hasta 3 llamadas es.
+- `fecha_call`: fecha **sin hora**, string `"YYYY-MM-DD"`, en hora local de Argentina — no un timestamp UTC. Es la fecha en la que ocurrió la llamada, no la fecha en la que el `ADMIN` cargó el evento (`timestamp` del evento); pueden diferir por días o meses si el registro se hace tarde. Los dashboards period-aware de la fase de llamada bucketean por `fecha_call`, **nunca** por `evento.timestamp`. Se guarda como string local (no como fecha con zona horaria) para que una llamada del día 31 a la noche no se bucketee en el mes siguiente por corrimiento de huso horario.
 - `califico`: `null` si `se_presento=false` (no aplica).
 - `cerro`: `null` si `califico` no es `true` (no aplica).
-- `monto_cierre`: solo tiene valor si `cerro=true`.
+- `monto_cierre`: entero en **centavos** (`250000` = USD 2.500,00) — nunca decimal, el payload es JSON y los floats rompen la suma de cash collected. Solo tiene valor si `cerro=true`; `null` en caso contrario.
+- `moneda`: **obligatoria** si hay `monto_cierre` (no opcional, sin default implícito). En V1 el único valor válido es `"USD"` — OPERAL opera en una sola moneda; el campo existe por trazabilidad y para no tener que reinterpretar montos históricos si en el futuro se abre a otra moneda. No hay conversión ni tipo de cambio en V1.
 
 **Reglas:**
 - ❌ **Solo puede registrarse sobre un lead cuya etapa actual (último `ESTADO_CAMBIADO`) sea exactamente `D`.** Un lead en `A`, `MS`, `B` o `C` rechaza el intento — mismo principio que rechazar un salto de etapa en el embudo original (`02_reglas_de_negocio.md` sección 2). No hay excepción: la fase de llamada no puede "adelantarse" a que el setter complete su parte.
@@ -288,10 +292,17 @@ Taxonomía cerrada (definida con el dueño del negocio):
 **Payload:**
 ```json
 {
-  "monto": 500,
-  "nota": "opcional"
+  "monto": 100000,
+  "moneda": "USD",
+  "fecha_pago": "2026-08-15",
+  "nota": "texto libre"
 }
 ```
+
+- `monto`: entero en **centavos** (`100000` = USD 1.000,00) — nunca decimal, mismo motivo que `monto_cierre` en `LLAMADA_REGISTRADA`.
+- `moneda`: **obligatoria**, sin default. En V1 el único valor válido es `"USD"` — mismo criterio que `LLAMADA_REGISTRADA`, no hay conversión ni multi-moneda en V1.
+- `fecha_pago`: fecha **sin hora**, string `"YYYY-MM-DD"`, en hora local de Argentina — no un timestamp UTC. Los planes de pago hacen que una cuota entre meses después del cierre; los dashboards de cash collected bucketean por `fecha_pago`, **nunca** por `evento.timestamp`. Mismo motivo y mismo formato que `fecha_call` en `LLAMADA_REGISTRADA`.
+- `nota`: opcional.
 
 **Reglas:** Solo puede registrarse sobre un lead con un `LLAMADA_REGISTRADA` de `cerro=true`. El sistema no procesa pagos ni valida montos contra el total del trato — es un registro de dato, no un módulo de cobros (fuera de alcance del Sprint 4, ver `06_sprint_4.md`).
 

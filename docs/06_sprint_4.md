@@ -48,14 +48,14 @@ Cada llamada registra: fecha de la call, si se presentó, si calificaba, situaci
 
 Por cada una de las hasta 3 llamadas:
 - Número de contacto (identificación del lead)
-- Día y fecha de la call
+- Día y fecha de la call → campo `fecha_call`, fecha sin hora (`"YYYY-MM-DD"`, hora local de Argentina), **distinta** del `timestamp` del evento (el ADMIN puede cargar el resultado días o meses después de que la llamada ocurrió). Los dashboards period-aware bucketean por `fecha_call`, no por `timestamp`.
 - ¿Se presentó?
 - ¿Calificaba?
 - Situación del lead
 - Notas
 - Autoevaluación del closer (texto libre)
 - Fuente / Setter (heredado del lead, ya existe)
-- Por cuánto cerró (monto — solo si cerró)
+- Por cuánto cerró (monto — solo si cerró) → entero en centavos + `moneda` obligatoria (único valor válido en V1: `"USD"`)
 - Grabación (link)
 
 ---
@@ -126,7 +126,9 @@ Los datos importados de Jorge llegan hasta D (agendó) — 4 leads. No tienen fa
   - AOV (Call Efectiva) = cash collected / cantidad de llamadas efectivas. Valor promedio por llamada concretada (incluye las que no cerraron en el denominador).
   - AOV (Trato Cerrado) = cash collected / cantidad de tratos cerrados. Valor promedio por cierre.
 - **Reagendas secuenciales, hasta 3 calls encadenadas.** No hay 2da call sin 1ra, ni 3ra sin 2da. Cada call es un registro propio con su fecha y resultado (una reagenda ocurre porque no se presentó / no cerró la anterior).
-- **Monto: dos campos separados.** "Por cuánto cerró" (total del trato) y "cash collected" (cobrado hasta ahora) pueden diferir, porque hay planes de pago y pay-in-full. Cash collected puede crecer en el tiempo si es plan de pagos.
+- **Monto: dos campos separados.** "Por cuánto cerró" (total del trato, `monto_cierre` en `LLAMADA_REGISTRADA`) y "cash collected" (cobrado hasta ahora) pueden diferir, porque hay planes de pago y pay-in-full. Cash collected **no se guarda como campo**: es la suma de los eventos `PAGO_REGISTRADO` de ese lead (cada uno con su propio `monto` y `fecha_pago`) — puede crecer en el tiempo si es plan de pagos, sin editar ningún evento existente.
+- **Todos los montos son enteros en centavos, nunca decimales** (el payload es JSON; los floats rompen la suma de cash collected), y llevan `moneda` obligatoria — único valor válido en V1: `"USD"`. Sin conversión ni multi-moneda en esta versión.
+- **Toda fecha de negocio (`fecha_call`, `fecha_pago`) es un string `"YYYY-MM-DD"` sin hora, en hora local de Argentina — nunca el `timestamp` del evento.** El `timestamp` es cuándo el ADMIN cargó el dato; la fecha de negocio es cuándo ocurrió realmente. Los dashboards period-aware de este sprint bucketean por la fecha de negocio.
 
 ## Fuera de alcance de este sprint (confirmado)
 
