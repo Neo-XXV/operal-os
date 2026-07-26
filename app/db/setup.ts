@@ -34,7 +34,7 @@ async function main() {
   await conn.execute(`
     CREATE TABLE eventos (
       id bigint unsigned auto_increment PRIMARY KEY,
-      tipo enum('LEAD_CREADO', 'LEAD_ASIGNADO', 'ESTADO_CAMBIADO', 'SEGUIMIENTO_ENVIADO', 'RESPUESTA_RECIBIDA', 'OBJECION_REGISTRADA', 'LEAD_DESCARTADO', 'NOTA_AGREGADA') NOT NULL,
+      tipo enum('LEAD_CREADO', 'LEAD_ASIGNADO', 'ESTADO_CAMBIADO', 'SEGUIMIENTO_ENVIADO', 'RESPUESTA_RECIBIDA', 'OBJECION_REGISTRADA', 'LEAD_DESCARTADO', 'NOTA_AGREGADA', 'LLAMADA_REGISTRADA', 'PAGO_REGISTRADO') NOT NULL,
       lead_id bigint unsigned NOT NULL,
       actor_tipo enum('SETTER', 'MANAGER', 'ADMIN', 'SISTEMA') NOT NULL,
       actor_id bigint unsigned,

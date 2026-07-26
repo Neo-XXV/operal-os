@@ -70,6 +70,8 @@ export const eventos = mysqlTable(
       "OBJECION_REGISTRADA",
       "LEAD_DESCARTADO",
       "NOTA_AGREGADA",
+      "LLAMADA_REGISTRADA",
+      "PAGO_REGISTRADO",
     ]).notNull(),
     leadId: bigint("lead_id", { mode: "number", unsigned: true }).notNull(),
     actorTipo: mysqlEnum("actor_tipo", ["SETTER", "MANAGER", "ADMIN", "SISTEMA"])
