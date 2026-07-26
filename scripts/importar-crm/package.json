@@ -1,0 +1,22 @@
+{
+  "name": "importar-crm",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Script de una sola vez: importa el CRM historico de Excel de un ex-setter al Event Log de OPERAL OS. No es parte de la app.",
+  "scripts": {
+    "import:staging": "tsx importar.ts --db=staging",
+    "import:real": "tsx importar.ts --db=real"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.2.3",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.2",
+    "typescript": "~5.9.3",
+    "@types/node": "^24.10.1",
+    "@types/bcryptjs": "^2.4.6"
+  }
+}
