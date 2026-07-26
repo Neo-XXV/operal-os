@@ -29,7 +29,7 @@ async function obtenerSetterActual(db: ReturnType<typeof getDb>, leadId: number)
 
 const ESTADOS_VALIDOS = ["A", "MS", "B", "C", "D"] as const;
 
-function validarTransicion(anterior: string | null, nuevo: string) {
+export function validarTransicion(anterior: string | null, nuevo: string) {
   if (!anterior) {
     if (nuevo !== "A") throw new Error("El primer estado debe ser A");
     return;
@@ -68,7 +68,7 @@ async function contarSeguimientos(db: ReturnType<typeof getDb>, leadId: number, 
 // vienen los eventos — el dia que existan proyecciones pre-calculadas
 // (Nota tecnica, 08_modelo_de_datos.md), esta funcion no cambia, solo cambia
 // que arreglo de eventos se le pasa.
-function calcularEmbudo(cambiosEstado: { leadId: number; payload: unknown }[]) {
+export function calcularEmbudo(cambiosEstado: { leadId: number; payload: unknown }[]) {
   const leadsPorEtapa: Record<string, Set<number>> = {
     A: new Set(),
     MS: new Set(),
@@ -108,7 +108,7 @@ type Periodo = "lifetime" | "mensual" | "trimestral" | "semestral" | "anual" | "
 // Resuelve [desde, hasta] del periodo actual y una ventana anterior de
 // igual duracion (evita comparar periodos de distinta longitud a mitad de
 // mes/trimestre/etc). "lifetime" no tiene ventana anterior.
-function resolverVentana(periodo: Periodo, desdeInput?: Date, hastaInput?: Date) {
+export function resolverVentana(periodo: Periodo, desdeInput?: Date, hastaInput?: Date) {
   const ahora = new Date();
 
   if (periodo === "lifetime") {
