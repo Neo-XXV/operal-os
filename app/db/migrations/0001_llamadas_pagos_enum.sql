@@ -1,3 +1,12 @@
+-- NOTA (post-hoc): esta migracion ya se aplico contra la base real ANTES de
+-- que existiera 0000_baseline_sprint4.sql -- ese baseline se genero despues
+-- y ya incluye este cambio (el schema.ts vigente al generarlo ya tenia el
+-- enum de 10 valores). Numericamente 0001 queda "antes" del 0000 en el
+-- journal de drizzle-kit por como se creo el baseline con el repo ya
+-- actualizado, pero cronologicamente 0001 se aplico primero, a mano. Se deja
+-- como registro historico exacto de que SQL se corrio y por que -- no hace
+-- falta volver a aplicarla en ninguna base que ya tenga el baseline.
+--
 -- Sprint 4: agrega LLAMADA_REGISTRADA y PAGO_REGISTRADO al enum eventos.tipo.
 -- Escrita a mano (no generada por drizzle-kit): el proyecto no tenia historial
 -- de migraciones trackeado (se uso db:push / db/setup.ts hasta ahora), asi que
