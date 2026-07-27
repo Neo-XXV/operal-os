@@ -63,7 +63,7 @@ Por cada una de las hasta 3 llamadas:
 ## Métricas del dashboard de llamadas (solo ADMIN)
 
 Dashboard propio, separado del embudo del setter:
-- **Show Up Rate** (se presentaron / agendados)
+- **Show Up Rate** (se presentaron / llamadas totales del período — no leads que llegaron a D en el período; son ejes de tiempo distintos, un lead puede llegar a D en un mes y tener su primera llamada en otro. No confundir con el "Agendados" del dashboard del setter, Sprint 3, que sí cuenta leads-en-D)
 - **Close Rate** = cerrados / calificados (Cierre/Califica — el KPI principal)
 - **AOV (Call Efectiva)** = cash collected / llamadas efectivas (llamada efectiva = se concretó)
 - **AOV (Trato Cerrado)** = cash collected / tratos cerrados
