@@ -310,6 +310,68 @@ Taxonomía cerrada (definida con el dueño del negocio):
 
 ---
 
+### 11. `CALENDAR_EVENTO_CREADO`
+
+**Descripción:** Se crea un evento en Google Calendar para agendar la llamada con el lead, disparado desde OPERAL OS (Sprint 5). Es el registro de una acción operativa externa — no mueve el embudo por sí solo (`02_reglas_de_negocio.md` sección 8).
+
+**Quién lo genera:** Setter o Admin.
+
+**Cuándo ocurre:** Cuando se crea el invite desde OPERAL OS y la API de Google Calendar confirma la creación.
+
+**Payload:**
+```json
+{
+  "google_event_id": "abc123xyz",
+  "calendar_id": "primary",
+  "fecha_hora_inicio": "2026-08-03T15:00:00-03:00",
+  "fecha_hora_fin": "2026-08-03T15:30:00-03:00",
+  "titulo": "texto libre",
+  "invitados": ["lead@email.com"]
+}
+```
+
+- `google_event_id`: id del evento devuelto por la API de Google Calendar — la referencia que permite editarlo después.
+- `fecha_hora_inicio`/`fecha_hora_fin`: con hora y zona horaria (a diferencia de `fecha_call`/`fecha_pago`, que son fecha sin hora) — un evento de Calendar necesita el horario exacto para el invite.
+- `invitados`: opcional, lista de emails a los que se les envía la notificación de Google.
+
+**Reglas:**
+- ❌ **Solo puede crearse si la etapa actual del lead es `C` o `D`.** Un lead en `A`, `MS` o `B` rechaza el intento.
+- **No puede crearse sobre un lead con `LEAD_DESCARTADO`** — mismo bloqueo que el resto de los eventos comerciales.
+- **Un lead tiene a lo sumo un evento de Calendar vigente.** Si ya existe uno (el más reciente `CALENDAR_EVENTO_CREADO`/`CALENDAR_EVENTO_ACTUALIZADO` de ese lead no fue reemplazado), crear uno nuevo se rechaza — la corrección de un evento vigente es `CALENDAR_EVENTO_ACTUALIZADO`, no un `CREADO` nuevo.
+- No genera ni modifica `ESTADO_CAMBIADO` — marcar C o D sigue siendo una acción manual separada.
+
+**Dispara:** vista de calendario, botón "Editar" en el detalle del lead (vía el `google_event_id` vigente).
+
+---
+
+### 12. `CALENDAR_EVENTO_ACTUALIZADO`
+
+**Descripción:** Se edita (reagenda) el evento de Calendar vigente que OPERAL había creado para ese lead.
+
+**Quién lo genera:** Setter o Admin.
+
+**Cuándo ocurre:** Al editar el evento desde OPERAL OS y la API de Google Calendar confirma la actualización.
+
+**Payload:**
+```json
+{
+  "google_event_id": "abc123xyz",
+  "fecha_hora_inicio": "2026-08-05T16:00:00-03:00",
+  "fecha_hora_fin": "2026-08-05T16:30:00-03:00"
+}
+```
+
+- `google_event_id`: debe coincidir con el del evento vigente del lead — no se edita un evento que OPERAL no creó, ni uno que ya fue reemplazado.
+
+**Reglas:**
+- ❌ Solo puede editarse el evento de Calendar **vigente** de un lead cuya etapa actual sea `C` o `D`.
+- **No puede editarse sobre un lead con `LEAD_DESCARTADO`.**
+- No genera ni modifica `ESTADO_CAMBIADO`.
+
+**Dispara:** vista de calendario (fecha/hora actualizada).
+
+---
+
 ## Resumen
 
 | # | Evento | Actor típico | ¿Tiene payload variable? |
@@ -324,6 +386,8 @@ Taxonomía cerrada (definida con el dueño del negocio):
 | 8 | `NOTA_AGREGADA` | Setter | Sí (texto) |
 | 9 | `LLAMADA_REGISTRADA` | Admin | Sí (número, resultado, montos) |
 | 10 | `PAGO_REGISTRADO` | Admin | Sí (monto, nota) |
+| 11 | `CALENDAR_EVENTO_CREADO` | Setter / Admin | Sí (google_event_id, horario) |
+| 12 | `CALENDAR_EVENTO_ACTUALIZADO` | Setter / Admin | Sí (google_event_id, horario) |
 
 ## Pendiente fuera de este documento
 

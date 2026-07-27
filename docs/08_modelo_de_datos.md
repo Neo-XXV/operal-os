@@ -56,7 +56,8 @@ Evento
   id
   tipo          (LEAD_CREADO | LEAD_ASIGNADO | ESTADO_CAMBIADO | SEGUIMIENTO_ENVIADO |
                  RESPUESTA_RECIBIDA | OBJECION_REGISTRADA | LEAD_DESCARTADO | NOTA_AGREGADA |
-                 LLAMADA_REGISTRADA | PAGO_REGISTRADO)
+                 LLAMADA_REGISTRADA | PAGO_REGISTRADO | CALENDAR_EVENTO_CREADO |
+                 CALENDAR_EVENTO_ACTUALIZADO)
   lead_id       (FK a Lead)
   actor_tipo    (SETTER | MANAGER | ADMIN | SISTEMA)
   actor_id      (FK a Usuario, nulo si actor_tipo = SISTEMA)
@@ -73,6 +74,7 @@ Evento
 | `Objecion` | La objeción no tiene ciclo de vida propio, ni relaciones, ni permisos, ni pantalla propia — es solo un dato dentro del payload de `OBJECION_REGISTRADA` | Cuando exista una base de conocimiento de objeciones con respuesta sugerida (entonces el evento pasaría a referenciar `objecion_id` en vez de texto libre) |
 | `Importacion` | No hay necesidad hoy de ver historial de importaciones, deshacerlas o auditar lotes de scraping por separado | Cuando se necesite reimportar, deshacer una importación, o rastrear qué lote generó qué leads |
 | `Llamada` | La llamada (Sprint 4) no tiene ciclo de vida propio más allá de los campos de su payload — es un dato dentro de `LLAMADA_REGISTRADA`, igual que `Objecion`. El "estado de la fase de llamada" de un lead es una proyección calculada, no una fila guardada | Si en el futuro se necesita programar llamadas con anticipación (recordatorios, calendario propio) en vez de solo registrar el resultado post-hoc |
+| `CalendarEvento` | La integración con Google Calendar (Sprint 5) tampoco crea una entidad propia — el `google_event_id` y el horario viven en el payload de `CALENDAR_EVENTO_CREADO`/`CALENDAR_EVENTO_ACTUALIZADO`, igual que `Llamada` y `Objecion`. Google Calendar mismo es el sistema que guarda el "objeto evento" completo; OPERAL solo guarda la referencia y el historial de esa referencia | Si se necesita administrar más de un evento vigente por lead, o metadata de Calendar que no quepa en un payload de evento |
 
 `LEAD_CREADO` guarda un `importacion_id` en su payload como referencia de trazabilidad, pero **no es una foreign key real** en V1 — es solo un dato de contexto, no una relación con una tabla `Importacion` (que no existe todavía).
 
@@ -110,6 +112,7 @@ Estas son ejemplos de vistas derivadas que el sistema va a necesitar calcular fr
 - **¿Un lead cerró? (Sprint 4):** existe un `LLAMADA_REGISTRADA` con `cerro=true` para ese lead. Gracias a la regla de que el cierre es terminal (ver `03_catalogo_eventos.md`), es un lookup directo — a lo sumo un evento así por lead, no hay que reconstruir la secuencia de llamadas.
 - **Estado de la fase de llamada de un lead (Sprint 4):** `PENDIENTE_LLAMAR` (llegó a D, cero llamadas) / `PENDIENTE_REAGENDA` (la última llamada no cerró y quedan intentos) / `CERRADO` / `PERDIDO` (se usaron las 3 llamadas sin cerrar) — derivado del conjunto de `LLAMADA_REGISTRADA` de ese lead, análogo a "etapa actual" pero para el mini-embudo del closer.
 - **Cash collected de un lead (Sprint 4):** suma de los montos de todos los `PAGO_REGISTRADO` de ese lead.
+- **Evento de Calendar vigente de un lead (Sprint 5):** el más reciente entre todos los `CALENDAR_EVENTO_CREADO`/`CALENDAR_EVENTO_ACTUALIZADO` de ese `lead_id`, ordenados por `timestamp` — mismo criterio de "último evento gana" que ya usa "etapa actual" o "setter actual". Ese evento trae el `google_event_id` a usar para el botón "Editar" y el horario a mostrar en la vista de calendario.
 
 Si el volumen de datos lo justifica más adelante, estas consultas pueden optimizarse con vistas materializadas — pero siguen siendo proyecciones, nunca la fuente de verdad.
 

@@ -76,5 +76,18 @@ Si la respuesta es no a ambas, esa acción no debe existir en la V1.
 - **Descarte durante la fase de llamada:** un lead puede descartarse (`LEAD_DESCARTADO`) en cualquier momento de su vida abierta, incluida la fase de llamada — no hace falta agotar las 3 llamadas. En esta fase, quien genera el descarte es `ADMIN` (el setter ya no tiene el lead). Un lead **cerrado** no puede descartarse (el cierre es terminal). Un lead **descartado** no puede recibir una llamada ni un pago nuevo — mismo bloqueo que rige para el resto de los eventos comerciales tras un descarte.
 - Los datos de la fase de llamada (montos, cash collected, grabaciones, notas de la call) son visibles únicamente para `ADMIN`. El `SETTER` no tiene acceso a esta información en la V1.
 - No existe el escenario de múltiples setters trabajando el mismo lead reciclado — el nicho actual es nuevo y la base de datos todavía no se recicla. Esta regla debe revisarse cuando eso empiece a ocurrir.
+
+## 8. Integración con Google Calendar
+
+*(Sprint 5. Le da implementación real a lo que la sección 2 ya nombraba conceptualmente: C es "el setter agendó en el calendario", D es "el lead confirmó el calendario" — hasta ahora ese agendamiento vivía fuera del sistema.)*
+
+- **Google Calendar es una herramienta operativa externa, no fuente de verdad de ningún estado.** El Event Log sigue siendo la única fuente de verdad del embudo.
+- **Marcar C y D sigue siendo 100% manual** (`ESTADO_CAMBIADO` por el setter/admin), exactamente como antes de esta integración. Crear o editar un evento de Calendar no marca ni exige C ni D — no hay gate en esa dirección.
+- **Crear/editar un evento de Calendar y marcar un estado del embudo son dos acciones separadas.** Un botón de la interfaz puede disparar ambas por comodidad del usuario, pero por dentro son dos escrituras independientes: una al Event Log, otra a la API de Google Calendar. Si una falla, la otra no se revierte automáticamente.
+- **Ninguna acción sobre Calendar dispara un `ESTADO_CAMBIADO` por sí sola.** No hay sincronización inversa (Calendar → Event Log): el sistema no interpreta notificaciones, respuestas de invitados ni cambios hechos directamente en Google Calendar para inferir estados del embudo. Es explícitamente frágil y queda fuera de alcance.
+- **Si un evento de Calendar se borra o falla al crearse/editarse, el embudo no se ve afectado** — el estado del lead vive en el Event Log, nunca en Calendar.
+- **Un lead tiene a lo sumo un evento de Calendar vigente.** Crear uno nuevo cuando ya existe uno vigente para ese lead se trata como reemplazo, no como un segundo evento paralelo — ver `03_catalogo_eventos.md` eventos 11 y 12.
+- **Crear o editar el evento de Calendar de un lead solo es válido si su etapa actual es `C` o `D`.** Un lead en `A`, `MS` o `B` todavía no llegó al punto de agendar — mismo principio de "no adelantarse al embudo" que ya rige `LLAMADA_REGISTRADA` en la sección 7, aplicado con dos etapas válidas en vez de una.
+
 ### Decisiones de arquitectura para versiones futuras
 - OPERAL OS V1 es **single-tenant**. Toda la aplicación opera para una única clínica. El soporte para múltiples clínicas (multi-tenant) queda fuera del alcance de esta versión y se evaluará en una versión futura cuando exista esa necesidad.
