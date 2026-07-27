@@ -573,6 +573,13 @@ export const eventRouter = createRouter({
           throw new Error(`Motivo de descarte invalido: ${payload.motivo}`);
         }
         await verificarLeadActivo(db, input.leadId);
+        // Sprint 4: "un lead ya cerrado no puede descartarse -- el cierre es
+        // terminal, no hay 'descartar una venta'" (03_catalogo_eventos.md,
+        // reglas de LEAD_DESCARTADO / interaccion con la fase de llamada).
+        const cierre = await obtenerCierre(db, input.leadId);
+        if (cierre.cerrado) {
+          throw new Error("El lead ya cerro. No se puede descartar un lead cerrado.");
+        }
       }
 
       // NOTA_AGREGADA es la unica excepcion al bloqueo post-descarte: es el
