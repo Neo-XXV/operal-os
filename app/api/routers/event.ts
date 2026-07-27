@@ -76,6 +76,16 @@ type EventoLlamada = { id: number; timestamp: Date; payload: unknown };
 // Agrupa llamadas por numero, quedandose con la mas reciente de cada una
 // (ya vienen ordenadas timestamp DESC, id DESC) -- el mismo numero puede
 // tener mas de un evento si se corrigio (ver reglas de LLAMADA_REGISTRADA).
+// fecha_call/fecha_pago son fechas de negocio locales, string "YYYY-MM-DD"
+// (ver 03_catalogo_eventos.md eventos 9-10) -- convierte una ventana de
+// resolverVentana (Date) al mismo formato para poder compararlas.
+function fechaLocalISO(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${dd}`;
+}
+
 function ultimaLlamadaPorNumero(llamadasDesc: EventoLlamada[]) {
   const porNumero = new Map<number, LlamadaPayload>();
   for (const ev of llamadasDesc) {
@@ -1164,4 +1174,102 @@ export const eventRouter = createRouter({
       };
     });
   }),
+
+  // Sprint 4, Fase 4: dashboard de la fase de llamada, period-aware.
+  // Reusa resolverVentana (Sprint 3) sin tocarla. Bucketea por fecha_call /
+  // fecha_pago (fecha de negocio), NUNCA por eventos.timestamp -- regla
+  // explicita de 06_sprint_4.md, el ADMIN puede cargar el resultado dias o
+  // meses despues de que la llamada/el cobro ocurrio en realidad.
+  dashboardLlamadas: adminQuery
+    .input(
+      z.object({
+        periodo: z.enum(["lifetime", "mensual", "trimestral", "semestral", "anual", "rango"]),
+        desde: z.coerce.date().optional(),
+        hasta: z.coerce.date().optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const db = getDb();
+      const ventana = resolverVentana(input.periodo, input.desde, input.hasta);
+      const hastaStr = fechaLocalISO(ventana.hasta);
+      const desdeStr = ventana.desde ? fechaLocalISO(ventana.desde) : null;
+
+      // Se trae TODO LLAMADA_REGISTRADA sin acotar por fecha en SQL todavia:
+      // una correccion puede cambiar el fecha_call de una llamada, y filtrar
+      // por fecha antes de quedarse con "la version mas reciente por numero"
+      // podria dejar afuera la version vigente o dejar adentro una ya
+      // superada. Se deduplica primero (mismo criterio que event.create),
+      // se filtra por fecha despues. Volumen chico (maximo 3 por lead en D).
+      const todasLasLlamadas = await db.query.eventos.findMany({
+        where: eq(eventos.tipo, "LLAMADA_REGISTRADA"),
+        orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+      });
+      const llamadasPorLead = new Map<number, EventoLlamada[]>();
+      for (const ev of todasLasLlamadas) {
+        const lista = llamadasPorLead.get(ev.leadId);
+        if (lista) lista.push(ev);
+        else llamadasPorLead.set(ev.leadId, [ev]);
+      }
+      const llamadasVigentes: { leadId: number; payload: LlamadaPayload }[] = [];
+      for (const [leadId, evs] of llamadasPorLead) {
+        for (const payload of ultimaLlamadaPorNumero(evs).values()) {
+          llamadasVigentes.push({ leadId, payload });
+        }
+      }
+
+      const enPeriodo = llamadasVigentes.filter(
+        (l) => l.payload.fecha_call <= hastaStr && (!desdeStr || l.payload.fecha_call >= desdeStr),
+      );
+
+      // "Actividad" -- cuenta LLAMADAS, no leads. "agendados" del Show Up
+      // Rate = llamadas totales de este periodo (NO el KPI "agendados" de
+      // dashboardEjecutivo, que cuenta leads llegando a D por timestamp --
+      // son ejes de tiempo distintos: un lead puede llegar a D en junio y
+      // tener su primera llamada en julio. Mezclarlos comparia numerador y
+      // denominador de grupos de leads distintos). Confirmado, no comparar
+      // este numero contra el "agendados" del otro dashboard.
+      const llamadasTotales = enPeriodo.length;
+      const llamadasCalificadas = enPeriodo.filter((l) => l.payload.califico === true).length;
+      const sePresentaron = enPeriodo.filter((l) => l.payload.se_presento === true).length;
+      const showUpRate = llamadasTotales > 0 ? sePresentaron / llamadasTotales : null;
+
+      // Close Rate (KPI principal del sprint) -- cuenta LEADS, no llamadas:
+      // un lead que califico en la call 1 y cerro en la 3 no debe contar 2
+      // veces en "calificados". Deduplicado por leadId via Set, mismo
+      // criterio que calcularEmbudo usa para el embudo del setter.
+      const leadsCalificados = new Set(enPeriodo.filter((l) => l.payload.califico === true).map((l) => l.leadId));
+      const leadsCerrados = new Set(enPeriodo.filter((l) => l.payload.cerro === true).map((l) => l.leadId));
+      const closeRate = leadsCalificados.size > 0 ? leadsCerrados.size / leadsCalificados.size : null;
+
+      // PAGO_REGISTRADO no tiene numero/correccion (cada pago es un hecho
+      // propio, no hay version "vigente" que resolver) -- solo se filtra
+      // por fecha_pago.
+      const condicionesPago = [eq(eventos.tipo, "PAGO_REGISTRADO")];
+      if (desdeStr) condicionesPago.push(sql`${eventos.payload}->>'$.fecha_pago' >= ${desdeStr}`);
+      condicionesPago.push(sql`${eventos.payload}->>'$.fecha_pago' <= ${hastaStr}`);
+      const pagosEnPeriodo = await db.query.eventos.findMany({ where: and(...condicionesPago) });
+      const cashCollectedTotal = pagosEnPeriodo.reduce((acc, ev) => acc + (ev.payload as { monto: number }).monto, 0);
+
+      // AOV: cash collected (por fecha_pago) sobre actividad de llamadas
+      // (por fecha_call) del MISMO periodo -- no necesariamente los mismos
+      // leads, por los planes de pago (una cuota puede caer meses despues
+      // del cierre). El AOV de un mes puede salir alto por cuotas viejas
+      // cobradas ese mes con pocos cierres nuevos -- es el comportamiento
+      // esperado con bucketeo por fecha de negocio propia (confirmado, no
+      // cohorte), no un error a corregir. Ver docs/06_sprint_4.md.
+      const aovCallEfectiva = sePresentaron > 0 ? cashCollectedTotal / sePresentaron : null;
+      const aovTratoCerrado = leadsCerrados.size > 0 ? cashCollectedTotal / leadsCerrados.size : null;
+
+      return {
+        ventana: { desde: ventana.desde, hasta: ventana.hasta },
+        llamadasTotales,
+        llamadasCalificadas,
+        showUpRate,
+        closeRate,
+        clientesCerrados: leadsCerrados.size,
+        cashCollected: cashCollectedTotal,
+        aovCallEfectiva,
+        aovTratoCerrado,
+      };
+    }),
 });
