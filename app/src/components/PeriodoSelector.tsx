@@ -44,7 +44,7 @@ export function PeriodoSelector({
         <SelectTrigger className="w-full sm:w-56">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent>
+        <SelectContent className="dark">
           {PERIODOS.map((p) => (
             <SelectItem key={p.value} value={p.value}>
               {p.label}
