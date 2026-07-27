@@ -503,6 +503,7 @@ export const eventRouter = createRouter({
           "OBJECION_REGISTRADA",
           "LEAD_DESCARTADO",
           "NOTA_AGREGADA",
+          "LLAMADA_REGISTRADA",
         ]),
         leadId: z.number(),
         payload: z.record(z.string(), z.any()),
@@ -579,6 +580,84 @@ export const eventRouter = createRouter({
         const cierre = await obtenerCierre(db, input.leadId);
         if (cierre.cerrado) {
           throw new Error("El lead ya cerro. No se puede descartar un lead cerrado.");
+        }
+      }
+
+      if (input.tipo === "LLAMADA_REGISTRADA") {
+        if (ctx.user.rol !== "ADMIN") {
+          throw new Error("Solo un ADMIN puede registrar una llamada.");
+        }
+        await verificarLeadActivo(db, input.leadId);
+
+        // Independiente del chequeo de arriba: un lead puede estar en D Y
+        // descartado a la vez (el descarte durante la fase de llamada lo
+        // genera el ADMIN, ver 03_catalogo_eventos.md) -- verificarLeadActivo
+        // ya cubre "no descartado"; esto cubre "esta en D", son chequeos
+        // independientes, no uno implica el otro.
+        const etapaActual = await obtenerEstadoActual(db, input.leadId);
+        if (etapaActual !== "D") {
+          throw new Error("El lead debe estar en D para registrar una llamada.");
+        }
+
+        const payload = input.payload as Partial<LlamadaPayload>;
+
+        if (
+          typeof payload.numero !== "number" ||
+          !Number.isInteger(payload.numero) ||
+          payload.numero < 1 ||
+          payload.numero > 3
+        ) {
+          throw new Error("numero debe ser 1, 2 o 3.");
+        }
+        if (typeof payload.fecha_call !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(payload.fecha_call)) {
+          throw new Error("fecha_call debe ser un string 'YYYY-MM-DD' (fecha local, sin hora).");
+        }
+        if (typeof payload.se_presento !== "boolean") {
+          throw new Error("se_presento es obligatorio (boolean).");
+        }
+        if (!payload.se_presento && payload.califico != null) {
+          throw new Error("califico debe ser null si se_presento es false.");
+        }
+        if (payload.califico !== true && payload.cerro != null) {
+          throw new Error("cerro debe ser null si califico no es true.");
+        }
+        if (payload.cerro === true) {
+          if (
+            typeof payload.monto_cierre !== "number" ||
+            !Number.isInteger(payload.monto_cierre) ||
+            payload.monto_cierre < 0
+          ) {
+            throw new Error("monto_cierre es obligatorio (entero en centavos) si cerro=true.");
+          }
+          if (payload.moneda !== "USD") {
+            throw new Error("moneda es obligatoria ('USD') si hay monto_cierre.");
+          }
+        } else if (payload.monto_cierre != null) {
+          throw new Error("monto_cierre debe ser null si cerro no es true.");
+        }
+
+        // numero secuencial: nueva llamada (maxNumero+1) o correccion de la
+        // ultima (maxNumero, solo si no cerro -- ya lo garantiza el chequeo
+        // de "yaCerrado" de abajo). Nunca se salta ni se corrige una ya
+        // superada por la siguiente.
+        const llamadasExistentes = await db.query.eventos.findMany({
+          where: and(eq(eventos.leadId, input.leadId), eq(eventos.tipo, "LLAMADA_REGISTRADA")),
+          orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+        });
+        const porNumero = ultimaLlamadaPorNumero(llamadasExistentes);
+        const yaCerrado = [...porNumero.values()].some((l) => l.cerro === true);
+        if (yaCerrado) {
+          throw new Error("El lead ya cerro. No se pueden registrar mas llamadas.");
+        }
+        const maxNumero = porNumero.size === 0 ? 0 : Math.max(...porNumero.keys());
+        const esNueva = payload.numero === maxNumero + 1;
+        const esCorreccion = maxNumero > 0 && payload.numero === maxNumero;
+        if (!esNueva && !esCorreccion) {
+          throw new Error(
+            maxNumero === 0
+              ? "La primera llamada debe ser numero=1."
+              : `numero invalido: la siguiente llamada valida es ${maxNumero + 1}, o corregir la ${maxNumero} (la mas reciente, no cerrada).`,
+          );
         }
       }
 
@@ -937,5 +1016,21 @@ export const eventRouter = createRouter({
         ventana: { desde: ventana.desde, hasta: ventana.hasta },
         origenes: origenStats,
       };
+    }),
+
+  // Sprint 4: proyecciones de la fase de llamada -- visibles unicamente para
+  // ADMIN (02_reglas_de_negocio.md seccion 7 / 06_sprint_4.md).
+  estadoLlamada: adminQuery
+    .input(z.object({ leadId: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return { estado: await obtenerEstadoLlamada(db, input.leadId) };
+    }),
+
+  cierre: adminQuery
+    .input(z.object({ leadId: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return obtenerCierre(db, input.leadId);
     }),
 });
