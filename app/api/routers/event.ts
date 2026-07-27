@@ -2,7 +2,7 @@ import { z } from "zod";
 import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { leads, eventos, users } from "@db/schema";
-import { eq, desc, and, gte, lte, inArray, count } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray, count, sql } from "drizzle-orm";
 
 // timestamp de MySQL tiene resolucion de 1 segundo — la carga rapida (Enter,
 // Enter, Enter) y los seguimientos en lote (Sprint 2) generan varios eventos
@@ -50,6 +50,174 @@ async function obtenerEstadoActual(db: ReturnType<typeof getDb>, leadId: number)
   return ultimo
     ? (ultimo.payload as { estado_nuevo: string }).estado_nuevo
     : null;
+}
+
+// ─── Sprint 4: fase de llamada (proyecciones, ver 03_catalogo_eventos.md
+// eventos 9-10 y 08_modelo_de_datos.md) ────────────────────────────────────
+
+type EstadoLlamada = "PENDIENTE_LLAMAR" | "PENDIENTE_REAGENDA" | "CERRADO" | "PERDIDO";
+
+type LlamadaPayload = {
+  numero: number;
+  fecha_call: string;
+  se_presento: boolean;
+  califico: boolean | null;
+  cerro: boolean | null;
+  monto_cierre: number | null;
+  moneda: string | null;
+  situacion?: string;
+  notas?: string;
+  autoevaluacion?: string;
+  grabacion_url?: string;
+};
+
+type EventoLlamada = { id: number; timestamp: Date; payload: unknown };
+
+// Agrupa llamadas por numero, quedandose con la mas reciente de cada una
+// (ya vienen ordenadas timestamp DESC, id DESC) -- el mismo numero puede
+// tener mas de un evento si se corrigio (ver reglas de LLAMADA_REGISTRADA).
+function ultimaLlamadaPorNumero(llamadasDesc: EventoLlamada[]) {
+  const porNumero = new Map<number, LlamadaPayload>();
+  for (const ev of llamadasDesc) {
+    const payload = ev.payload as LlamadaPayload;
+    if (!porNumero.has(payload.numero)) porNumero.set(payload.numero, payload);
+  }
+  return porNumero;
+}
+
+// Funcion pura: separa el calculo de la lectura de DB (mismo patron que
+// calcularEmbudo) -- la usan tanto la version de un lead como la de lote.
+export function calcularEstadoLlamada(llamadasDesc: EventoLlamada[]): EstadoLlamada {
+  if (llamadasDesc.length === 0) return "PENDIENTE_LLAMAR";
+
+  const porNumero = ultimaLlamadaPorNumero(llamadasDesc);
+  const cerro = [...porNumero.values()].some((l) => l.cerro === true);
+  if (cerro) return "CERRADO";
+
+  const maxNumero = Math.max(...porNumero.keys());
+  return maxNumero >= 3 ? "PERDIDO" : "PENDIENTE_REAGENDA";
+}
+
+// null = el lead nunca llego a D, la fase de llamada no aplica todavia
+// (agregado sobre lo documentado: sin esto, un lead en B mostraria
+// "PENDIENTE_LLAMAR", enganoso -- no hay ninguna accion pendiente ahi).
+export async function obtenerEstadoLlamada(db: ReturnType<typeof getDb>, leadId: number): Promise<EstadoLlamada | null> {
+  const etapaActual = await obtenerEstadoActual(db, leadId);
+  if (etapaActual !== "D") return null;
+
+  const llamadas = await db.query.eventos.findMany({
+    where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "LLAMADA_REGISTRADA")),
+    orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+  });
+  return calcularEstadoLlamada(llamadas);
+}
+
+export async function obtenerEstadoLlamadaLote(
+  db: ReturnType<typeof getDb>,
+  leadIds: number[],
+): Promise<Map<number, EstadoLlamada | null>> {
+  const resultado = new Map<number, EstadoLlamada | null>();
+  if (leadIds.length === 0) return resultado;
+
+  // Dos queries batcheadas (nunca N+1): una para saber quien esta en D, otra
+  // para las llamadas de todos los leads pedidos.
+  const [cambios, llamadas] = await Promise.all([
+    db.query.eventos.findMany({
+      where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "ESTADO_CAMBIADO")),
+      orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+    }),
+    db.query.eventos.findMany({
+      where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "LLAMADA_REGISTRADA")),
+      orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+    }),
+  ]);
+
+  const etapaPorLead = new Map<number, string>();
+  for (const ev of cambios) {
+    if (!etapaPorLead.has(ev.leadId)) {
+      etapaPorLead.set(ev.leadId, (ev.payload as { estado_nuevo: string }).estado_nuevo);
+    }
+  }
+
+  const llamadasPorLead = new Map<number, EventoLlamada[]>();
+  for (const ev of llamadas) {
+    const lista = llamadasPorLead.get(ev.leadId);
+    if (lista) lista.push(ev);
+    else llamadasPorLead.set(ev.leadId, [ev]);
+  }
+
+  for (const leadId of leadIds) {
+    if (etapaPorLead.get(leadId) !== "D") {
+      resultado.set(leadId, null);
+      continue;
+    }
+    resultado.set(leadId, calcularEstadoLlamada(llamadasPorLead.get(leadId) ?? []));
+  }
+
+  return resultado;
+}
+
+type Cierre = { cerrado: boolean; montoCierre: number | null; moneda: string | null; timestamp: Date | null };
+
+const CIERRE_VACIO: Cierre = { cerrado: false, montoCierre: null, moneda: null, timestamp: null };
+
+// Gracias al bloqueo post-cierre (no se puede registrar otra llamada una vez
+// que existe una con cerro=true), hay a lo sumo un evento asi por lead --
+// lookup directo filtrado en SQL, no una reconstruccion de la secuencia.
+export async function obtenerCierre(db: ReturnType<typeof getDb>, leadId: number): Promise<Cierre> {
+  const cierre = await db.query.eventos.findFirst({
+    where: and(
+      eq(eventos.leadId, leadId),
+      eq(eventos.tipo, "LLAMADA_REGISTRADA"),
+      sql`${eventos.payload}->>'$.cerro' = 'true'`,
+    ),
+  });
+  if (!cierre) return CIERRE_VACIO;
+  const payload = cierre.payload as LlamadaPayload;
+  return { cerrado: true, montoCierre: payload.monto_cierre, moneda: payload.moneda, timestamp: cierre.timestamp };
+}
+
+export async function obtenerCierreLote(db: ReturnType<typeof getDb>, leadIds: number[]): Promise<Map<number, Cierre>> {
+  const resultado = new Map<number, Cierre>();
+  if (leadIds.length === 0) return resultado;
+  for (const leadId of leadIds) resultado.set(leadId, CIERRE_VACIO);
+
+  const cierres = await db.query.eventos.findMany({
+    where: and(
+      inArray(eventos.leadId, leadIds),
+      eq(eventos.tipo, "LLAMADA_REGISTRADA"),
+      sql`${eventos.payload}->>'$.cerro' = 'true'`,
+    ),
+  });
+  for (const ev of cierres) {
+    const payload = ev.payload as LlamadaPayload;
+    resultado.set(ev.leadId, { cerrado: true, montoCierre: payload.monto_cierre, moneda: payload.moneda, timestamp: ev.timestamp });
+  }
+  return resultado;
+}
+
+// Cash collected nunca se guarda -- es la suma de PAGO_REGISTRADO de ese
+// lead, calculada al consultar (02_reglas_de_negocio.md seccion 7 / 4).
+export async function cashCollected(db: ReturnType<typeof getDb>, leadId: number): Promise<number> {
+  const pagos = await db.query.eventos.findMany({
+    where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "PAGO_REGISTRADO")),
+  });
+  return pagos.reduce((acc, ev) => acc + (ev.payload as { monto: number }).monto, 0);
+}
+
+export async function cashCollectedLote(db: ReturnType<typeof getDb>, leadIds: number[]): Promise<Map<number, number>> {
+  const resultado = new Map<number, number>();
+  if (leadIds.length === 0) return resultado;
+  for (const leadId of leadIds) resultado.set(leadId, 0);
+
+  const pagos = await db.query.eventos.findMany({
+    where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "PAGO_REGISTRADO")),
+  });
+  for (const ev of pagos) {
+    const monto = (ev.payload as { monto: number }).monto;
+    resultado.set(ev.leadId, (resultado.get(ev.leadId) ?? 0) + monto);
+  }
+  return resultado;
 }
 
 // El numero de seguimiento se deriva contando eventos previos en la misma
