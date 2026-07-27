@@ -8,6 +8,7 @@ import {
   Home,
   Menu,
   X,
+  Phone,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -34,6 +35,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     ...(isSetter ? [] : [{ href: "/", label: "Dashboard", icon: Home }]),
     ...(isAdmin ? [{ href: "/usuarios", label: "Usuarios", icon: Users }] : []),
     { href: "/leads", label: "Leads", icon: UserPlus },
+    // Sprint 4: fase de llamada -- solo ADMIN, el setter no participa de
+    // esta fase (ver 02_reglas_de_negocio.md seccion 7). El guard real esta
+    // en la pagina (Llamadas.tsx) y en el backend; esto solo oculta el link.
+    ...(isAdmin ? [{ href: "/llamadas", label: "Llamadas", icon: Phone }] : []),
     // Event Log es una vista de auditoria global — no aporta al centro
     // operativo del setter (su tabla + el detalle de cada lead). Sigue
     // existiendo para ADMIN/MANAGER, solo se saca del nav del setter.

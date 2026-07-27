@@ -5,6 +5,7 @@ import Usuarios from './pages/Usuarios'
 import Leads from './pages/Leads'
 import LeadDetail from './pages/LeadDetail'
 import EventLog from './pages/EventLog'
+import Llamadas from './pages/Llamadas'
 
 export default function App() {
   return (
@@ -15,6 +16,7 @@ export default function App() {
       <Route path="/leads" element={<Leads />} />
       <Route path="/leads/:id" element={<LeadDetail />} />
       <Route path="/event-log" element={<EventLog />} />
+      <Route path="/llamadas" element={<Llamadas />} />
     </Routes>
   )
 }

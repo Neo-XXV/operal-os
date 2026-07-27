@@ -18,6 +18,20 @@ Decisión:
 Estado:
 Pendiente.
 
+### `/usuarios` sin guard de ruta (frontend)
+
+Origen:
+- Investigación de rutas hecha al planificar la Fase 5 del Sprint 4 (pantallas de la fase de llamada). Ninguna ruta del frontend tiene guard propio hoy — `/usuarios` (solo-admin en espíritu) se protege únicamente ocultando el link del nav para `SETTER`; la página en sí (`Usuarios.tsx`) no chequea rol ni redirige.
+
+Impacto:
+- Un `SETTER` que tipee `/usuarios` en la barra de direcciones ve la pantalla renderizada (aunque vacía/no funcional, ya que las queries y mutaciones del backend rechazan su rol). No hay fuga de datos — el backend es la barrera real — pero es una superficie que no debería ni mostrarse.
+
+Decisión:
+- No se corrige ahora: fuera del alcance del Sprint 4. La Fase 5 de este sprint sí agrega guard de ruta inline (patrón `Dashboard.tsx`) a la pantalla nueva `/llamadas`, pero no se retrofittea `/usuarios` de paso — cambio aislado, a resolver aparte.
+
+Estado:
+Pendiente.
+
 ## Datos
 
 ### Lead de prueba no borrable en la base real (id 1637)

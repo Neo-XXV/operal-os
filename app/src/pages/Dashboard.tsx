@@ -5,15 +5,7 @@ import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+import { PeriodoSelector } from "@/components/PeriodoSelector";
 import {
   ChartContainer,
   ChartTooltip,
@@ -81,15 +73,6 @@ const ORIGEN_LABELS: Record<string, string> = {
   MANUAL: "Manual",
   RPP: "RPP",
 };
-
-const PERIODOS = [
-  { value: "lifetime", label: "Todo el historial" },
-  { value: "mensual", label: "Este mes" },
-  { value: "trimestral", label: "Este trimestre" },
-  { value: "semestral", label: "Este semestre" },
-  { value: "anual", label: "Este año" },
-  { value: "rango", label: "Rango personalizado" },
-];
 
 const TRANSICIONES = [
   { key: "MSR", label: "A → MS", desc: "Respondio al primer mensaje" },
@@ -353,42 +336,14 @@ export default function Dashboard() {
           </div>
 
           {isAdmin && (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
-              <Select value={periodo} onValueChange={setPeriodo}>
-                <SelectTrigger className="w-full sm:w-56">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {PERIODOS.map((p) => (
-                    <SelectItem key={p.value} value={p.value}>
-                      {p.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {periodo === "rango" && (
-                <div className="flex items-center gap-2">
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-400">Desde</Label>
-                    <Input
-                      type="date"
-                      value={rangoDesde}
-                      onChange={(e) => setRangoDesde(e.target.value)}
-                      className="w-36"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label className="text-xs text-slate-400">Hasta</Label>
-                    <Input
-                      type="date"
-                      value={rangoHasta}
-                      onChange={(e) => setRangoHasta(e.target.value)}
-                      className="w-36"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
+            <PeriodoSelector
+              periodo={periodo}
+              onPeriodoChange={setPeriodo}
+              rangoDesde={rangoDesde}
+              onRangoDesdeChange={setRangoDesde}
+              rangoHasta={rangoHasta}
+              onRangoHastaChange={setRangoHasta}
+            />
           )}
         </div>
 
