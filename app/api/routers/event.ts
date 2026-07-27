@@ -1064,4 +1064,104 @@ export const eventRouter = createRouter({
       const db = getDb();
       return { montoTotal: await cashCollected(db, input.leadId) };
     }),
+
+  // Sprint 4, Fase 4: "cola" de leads pendientes de accion en la fase de
+  // llamada. No es una lista "de hoy" en sentido literal -- no existe un
+  // campo de "proxima llamada programada" (automatizacion de reagenda esta
+  // fuera de alcance del sprint, ver 06_sprint_4.md) -- es todo lo que esta
+  // en D, no descartado, y en PENDIENTE_LLAMAR o PENDIENTE_REAGENDA.
+  leadsParaLlamar: adminQuery.query(async () => {
+    const db = getDb();
+
+    const cambios = await db.query.eventos.findMany({
+      where: eq(eventos.tipo, "ESTADO_CAMBIADO"),
+      orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+    });
+    const etapaPorLead = new Map<number, string>();
+    for (const ev of cambios) {
+      if (!etapaPorLead.has(ev.leadId)) {
+        etapaPorLead.set(ev.leadId, (ev.payload as { estado_nuevo: string }).estado_nuevo);
+      }
+    }
+    const leadIdsEnD = [...etapaPorLead.entries()].filter(([, e]) => e === "D").map(([id]) => id);
+    if (leadIdsEnD.length === 0) return [];
+
+    // Un lead en D puede estar descartado (lo genera el ADMIN durante la
+    // fase de llamada, ver 03_catalogo_eventos.md) -- se excluye aca, no
+    // aparece en la cola de llamadas pendientes.
+    const descartes = await db.query.eventos.findMany({
+      where: and(inArray(eventos.leadId, leadIdsEnD), eq(eventos.tipo, "LEAD_DESCARTADO")),
+    });
+    const idsDescartados = new Set(descartes.map((e) => e.leadId));
+    const leadIdsActivos = leadIdsEnD.filter((id) => !idsDescartados.has(id));
+    if (leadIdsActivos.length === 0) return [];
+
+    const [estados, llamadas, asignaciones, creaciones, leadsInfo] = await Promise.all([
+      obtenerEstadoLlamadaLote(db, leadIdsActivos),
+      db.query.eventos.findMany({
+        where: and(inArray(eventos.leadId, leadIdsActivos), eq(eventos.tipo, "LLAMADA_REGISTRADA")),
+        orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+      }),
+      db.query.eventos.findMany({
+        where: and(inArray(eventos.leadId, leadIdsActivos), eq(eventos.tipo, "LEAD_ASIGNADO")),
+        orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+      }),
+      db.query.eventos.findMany({
+        where: and(inArray(eventos.leadId, leadIdsActivos), eq(eventos.tipo, "LEAD_CREADO")),
+      }),
+      db.query.leads.findMany({ where: inArray(leads.id, leadIdsActivos) }),
+    ]);
+
+    const idsParaLlamar = leadIdsActivos.filter((id) => {
+      const estado = estados.get(id);
+      return estado === "PENDIENTE_LLAMAR" || estado === "PENDIENTE_REAGENDA";
+    });
+
+    const llamadasPorLead = new Map<number, EventoLlamada[]>();
+    for (const ev of llamadas) {
+      const lista = llamadasPorLead.get(ev.leadId);
+      if (lista) lista.push(ev);
+      else llamadasPorLead.set(ev.leadId, [ev]);
+    }
+
+    const setterPorLead = new Map<number, number>();
+    for (const ev of asignaciones) {
+      if (!setterPorLead.has(ev.leadId)) {
+        setterPorLead.set(ev.leadId, (ev.payload as { setter_nuevo: number }).setter_nuevo);
+      }
+    }
+
+    const origenPorLead = new Map<number, string>();
+    for (const ev of creaciones) {
+      origenPorLead.set(ev.leadId, (ev.payload as { origen: string }).origen);
+    }
+
+    const setterIds = [...new Set(setterPorLead.values())];
+    const setters =
+      setterIds.length > 0
+        ? await db.query.users.findMany({ where: inArray(users.id, setterIds), columns: { id: true, nombre: true } })
+        : [];
+    const nombreSetterPorId = new Map(setters.map((s) => [s.id, s.nombre]));
+
+    const leadsPorId = new Map(leadsInfo.map((l) => [l.id, l]));
+
+    return idsParaLlamar.map((id) => {
+      const lead = leadsPorId.get(id)!;
+      const porNumero = ultimaLlamadaPorNumero(llamadasPorLead.get(id) ?? []);
+      const maxNumero = porNumero.size === 0 ? 0 : Math.max(...porNumero.keys());
+      const ultima = maxNumero > 0 ? porNumero.get(maxNumero)! : null;
+      const setterId = setterPorLead.get(id) ?? null;
+
+      return {
+        leadId: id,
+        nombre: lead.nombre,
+        instagramUsername: lead.instagramUsername,
+        estadoLlamada: estados.get(id),
+        origen: origenPorLead.get(id) ?? null,
+        setterId,
+        setterNombre: setterId ? (nombreSetterPorId.get(setterId) ?? null) : null,
+        ultimaLlamada: ultima ? { numero: maxNumero, fecha_call: ultima.fecha_call } : null,
+      };
+    });
+  }),
 });
