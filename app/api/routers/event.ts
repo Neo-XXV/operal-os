@@ -504,6 +504,7 @@ export const eventRouter = createRouter({
           "LEAD_DESCARTADO",
           "NOTA_AGREGADA",
           "LLAMADA_REGISTRADA",
+          "PAGO_REGISTRADO",
         ]),
         leadId: z.number(),
         payload: z.record(z.string(), z.any()),
@@ -658,6 +659,29 @@ export const eventRouter = createRouter({
               ? "La primera llamada debe ser numero=1."
               : `numero invalido: la siguiente llamada valida es ${maxNumero + 1}, o corregir la ${maxNumero} (la mas reciente, no cerrada).`,
           );
+        }
+      }
+
+      if (input.tipo === "PAGO_REGISTRADO") {
+        if (ctx.user.rol !== "ADMIN") {
+          throw new Error("Solo un ADMIN puede registrar un pago.");
+        }
+        await verificarLeadActivo(db, input.leadId);
+
+        const cierre = await obtenerCierre(db, input.leadId);
+        if (!cierre.cerrado) {
+          throw new Error("Solo se puede registrar un pago sobre un lead cerrado (LLAMADA_REGISTRADA con cerro=true).");
+        }
+
+        const payload = input.payload as { monto?: unknown; moneda?: unknown; fecha_pago?: unknown };
+        if (typeof payload.monto !== "number" || !Number.isInteger(payload.monto) || payload.monto <= 0) {
+          throw new Error("monto es obligatorio (entero positivo en centavos).");
+        }
+        if (payload.moneda !== "USD") {
+          throw new Error("moneda es obligatoria ('USD').");
+        }
+        if (typeof payload.fecha_pago !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(payload.fecha_pago)) {
+          throw new Error("fecha_pago debe ser un string 'YYYY-MM-DD' (fecha local, sin hora).");
         }
       }
 
@@ -1032,5 +1056,12 @@ export const eventRouter = createRouter({
     .query(async ({ input }) => {
       const db = getDb();
       return obtenerCierre(db, input.leadId);
+    }),
+
+  cashCollected: adminQuery
+    .input(z.object({ leadId: z.number() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      return { montoTotal: await cashCollected(db, input.leadId) };
     }),
 });
