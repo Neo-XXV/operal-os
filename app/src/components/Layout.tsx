@@ -1,5 +1,6 @@
 import { Link, useLocation, Navigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import {
   Users,
   UserPlus,
@@ -88,6 +89,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               <p className="text-sm font-medium truncate">{user.nombre}</p>
               <p className="text-xs text-slate-400 capitalize">{user.rol.toLowerCase()}</p>
             </div>
+            <ThemeToggle className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex-shrink-0" />
           </div>
           <button
             onClick={logout}
@@ -103,9 +105,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-900 text-white">
         <div className="flex items-center justify-between p-4">
           <h1 className="text-lg font-bold">OPERAL OS</h1>
-          <button onClick={() => setMobileOpen(!mobileOpen)}>
-            {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-          </button>
+          <div className="flex items-center gap-1">
+            <ThemeToggle className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" />
+            <button onClick={() => setMobileOpen(!mobileOpen)}>
+              {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
+          </div>
         </div>
         {mobileOpen && (
           <nav className="px-4 pb-4 space-y-1">
