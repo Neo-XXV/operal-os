@@ -9,7 +9,7 @@ import { eq, desc, and, gte, lte, inArray, count, sql } from "drizzle-orm";
 // en el mismo segundo como flujo normal, no como caso borde. Desempatar SIEMPRE
 // por id (autoincremental, refleja el orden real de insercion) o el "ultimo
 // evento" no es deterministico.
-async function verificarLeadActivo(db: ReturnType<typeof getDb>, leadId: number) {
+export async function verificarLeadActivo(db: ReturnType<typeof getDb>, leadId: number) {
   const descarte = await db.query.eventos.findFirst({
     where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "LEAD_DESCARTADO")),
     orderBy: [desc(eventos.timestamp), desc(eventos.id)],
@@ -17,7 +17,7 @@ async function verificarLeadActivo(db: ReturnType<typeof getDb>, leadId: number)
   if (descarte) throw new Error("El lead esta descartado. No se pueden registrar nuevos eventos.");
 }
 
-async function obtenerSetterActual(db: ReturnType<typeof getDb>, leadId: number) {
+export async function obtenerSetterActual(db: ReturnType<typeof getDb>, leadId: number) {
   const ultimaAsignacion = await db.query.eventos.findFirst({
     where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "LEAD_ASIGNADO")),
     orderBy: [desc(eventos.timestamp), desc(eventos.id)],
@@ -42,7 +42,7 @@ export function validarTransicion(anterior: string | null, nuevo: string) {
   }
 }
 
-async function obtenerEstadoActual(db: ReturnType<typeof getDb>, leadId: number) {
+export async function obtenerEstadoActual(db: ReturnType<typeof getDb>, leadId: number) {
   const ultimo = await db.query.eventos.findFirst({
     where: and(eq(eventos.leadId, leadId), eq(eventos.tipo, "ESTADO_CAMBIADO")),
     orderBy: [desc(eventos.timestamp), desc(eventos.id)],

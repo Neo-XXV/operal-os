@@ -112,13 +112,15 @@ export const leadRouter = createRouter({
 
   // Nombre e Instagram son campos propios de la entidad Lead (no proyecciones
   // del Event Log) — editables directamente, como marca la tabla de columnas
-  // del Sprint 2.
+  // del Sprint 2. Email (Sprint 5) sigue el mismo criterio -- se completa a
+  // mano cuando hace falta para agendar en Calendar, el scraping no lo trae.
   update: authedQuery
     .input(
       z.object({
         id: z.number(),
         nombre: z.string().optional(),
         instagramUsername: z.string().min(1, "Username requerido").optional(),
+        email: z.string().email().optional(),
       }),
     )
     .mutation(async ({ ctx, input }) => {
