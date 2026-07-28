@@ -21,8 +21,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   if (isLoading) {
     return (
-      <div className="flex h-screen items-center justify-center bg-slate-50">
-        <div className="animate-spin h-8 w-8 border-4 border-slate-900 border-t-transparent rounded-full" />
+      <div className="flex h-screen items-center justify-center bg-background">
+        <div className="animate-spin h-8 w-8 border-4 border-foreground border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -52,12 +52,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="flex h-screen bg-slate-50">
+    <div className="flex h-screen bg-background">
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-slate-900 text-white">
-        <div className="p-6 border-b border-slate-700">
+      <aside className="hidden md:flex flex-col w-64 bg-sidebar text-sidebar-foreground">
+        <div className="p-6 border-b border-sidebar-border">
           <h1 className="text-xl font-bold tracking-tight">OPERAL OS</h1>
-          <p className="text-xs text-slate-400 mt-1">Sprint 1 — v0.1</p>
+          <p className="text-xs text-sidebar-foreground/60 mt-1">Sprint 1 — v0.1</p>
         </div>
 
         <nav className="flex-1 p-4 space-y-1">
@@ -69,8 +69,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 to={item.href}
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   active
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:text-white hover:bg-slate-800"
+                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
                 }`}
               >
                 <item.icon className="w-4 h-4" />
@@ -80,20 +80,20 @@ export function Layout({ children }: { children: React.ReactNode }) {
           })}
         </nav>
 
-        <div className="p-4 border-t border-slate-700">
+        <div className="p-4 border-t border-sidebar-border">
           <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center text-sm font-semibold">
+            <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center text-sm font-semibold">
               {user.nombre.charAt(0).toUpperCase()}
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium truncate">{user.nombre}</p>
-              <p className="text-xs text-slate-400 capitalize">{user.rol.toLowerCase()}</p>
+              <p className="text-xs text-sidebar-foreground/60 capitalize">{user.rol.toLowerCase()}</p>
             </div>
-            <ThemeToggle className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors flex-shrink-0" />
+            <ThemeToggle className="flex items-center justify-center w-8 h-8 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors flex-shrink-0" />
           </div>
           <button
             onClick={logout}
-            className="flex items-center gap-2 px-3 py-2 mt-2 text-sm text-slate-400 hover:text-white transition-colors w-full"
+            className="flex items-center gap-2 px-3 py-2 mt-2 text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors w-full"
           >
             <LogOut className="w-4 h-4" />
             Cerrar sesión
@@ -102,11 +102,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-900 text-white">
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar text-sidebar-foreground">
         <div className="flex items-center justify-between p-4">
           <h1 className="text-lg font-bold">OPERAL OS</h1>
           <div className="flex items-center gap-1">
-            <ThemeToggle className="flex items-center justify-center w-8 h-8 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors" />
+            <ThemeToggle className="flex items-center justify-center w-8 h-8 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors" />
             <button onClick={() => setMobileOpen(!mobileOpen)}>
               {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
@@ -123,8 +123,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   onClick={() => setMobileOpen(false)}
                   className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ${
                     active
-                      ? "bg-slate-800 text-white"
-                      : "text-slate-400 hover:text-white"
+                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      : "text-sidebar-foreground/70 hover:text-sidebar-foreground"
                   }`}
                 >
                   <item.icon className="w-4 h-4" />
@@ -134,7 +134,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             })}
             <button
               onClick={logout}
-              className="flex items-center gap-2 px-3 py-2 text-sm text-slate-400 w-full"
+              className="flex items-center gap-2 px-3 py-2 text-sm text-sidebar-foreground/70 w-full"
             >
               <LogOut className="w-4 h-4" />
               Cerrar sesión
@@ -144,7 +144,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </div>
 
       {/* Main content */}
-      <main className="flex-1 overflow-auto pt-16 md:pt-0">
+      <main className="flex-1 overflow-auto pt-16 md:pt-0 bg-background text-foreground">
         <div className="p-6 max-w-7xl mx-auto">{children}</div>
       </main>
     </div>
