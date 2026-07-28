@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Send, MessageSquare, AlertTriangle, StickyNote, XCircle } from "lucide-react";
+import { ArrowLeft, Plus, Send, MessageSquare, AlertTriangle, StickyNote, XCircle, CalendarDays } from "lucide-react";
 
 type LlamadaPayload = {
   numero: number;
@@ -40,12 +40,39 @@ type LlamadaPayload = {
 
 type PagoPayload = { monto: number; moneda: string; fecha_pago: string; nota?: string };
 
+type CalendarEventoPayload = {
+  google_event_id: string;
+  fecha_hora_inicio: string;
+  fecha_hora_fin: string;
+  titulo?: string;
+};
+
 function hoyISO() {
   const d = new Date();
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dd}`;
+}
+
+// "2026-08-03T15:00:00.000Z" -> { fecha: "2026-08-03", hora: "15:00" } en
+// hora local del navegador -- mismo criterio que el resto del sistema, sin
+// conversion explicita de zona horaria (asume que quien usa la app esta en
+// la misma zona que el negocio, igual que fecha_call/fecha_pago).
+function partesFechaHora(iso: string) {
+  const d = new Date(iso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mm = String(d.getMinutes()).padStart(2, "0");
+  return { fecha: `${y}-${m}-${dd}`, hora: `${hh}:${mm}` };
+}
+
+function formatFechaHoraCorta(iso: string) {
+  const { fecha, hora } = partesFechaHora(iso);
+  const [, mes, dia] = fecha.split("-");
+  return `${dia}/${mes} ${hora}`;
 }
 
 function formatUSD(centavos: number) {
@@ -104,6 +131,83 @@ export default function LeadDetail() {
 
   const { data: lead } = trpc.lead.getById.useQuery({ id: leadId });
   const { data: timeline } = trpc.event.timeline.useQuery({ leadId });
+
+  // Sprint 5: integracion con Google Calendar -- a diferencia de la fase de
+  // llamada, participan setter y admin por igual (docs/02_reglas_de_negocio
+  // (1).md seccion 8), asi que no va gateado por isAdmin.
+  const { data: calendarEstado } = trpc.calendar.estado.useQuery();
+
+  // "Vigente" = el mas reciente CALENDAR_EVENTO_CREADO/ACTUALIZADO del lead
+  // -- timeline ya viene ordenado desc por [timestamp, id], asi que el
+  // primer match es el vigente sin necesidad de ordenar de nuevo.
+  const calendarVigenteEv = (timeline ?? []).find(
+    (ev) => ev.tipo === "CALENDAR_EVENTO_CREADO" || ev.tipo === "CALENDAR_EVENTO_ACTUALIZADO",
+  );
+  const calendarVigente = calendarVigenteEv
+    ? (calendarVigenteEv.payload as CalendarEventoPayload)
+    : null;
+
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const [tituloCalendar, setTituloCalendar] = useState("");
+  const [fechaCalendar, setFechaCalendar] = useState(hoyISO());
+  const [horaInicioCalendar, setHoraInicioCalendar] = useState("15:00");
+  const [horaFinCalendar, setHoraFinCalendar] = useState("15:30");
+  const [emailCalendar, setEmailCalendar] = useState("");
+  const [errorCalendar, setErrorCalendar] = useState("");
+
+  const abrirDialogCalendar = () => {
+    if (calendarVigente) {
+      const inicio = partesFechaHora(calendarVigente.fecha_hora_inicio);
+      const fin = partesFechaHora(calendarVigente.fecha_hora_fin);
+      setFechaCalendar(inicio.fecha);
+      setHoraInicioCalendar(inicio.hora);
+      setHoraFinCalendar(fin.hora);
+    } else {
+      setTituloCalendar(`Llamada con ${lead?.nombre || "el lead"}`);
+      setFechaCalendar(hoyISO());
+      setHoraInicioCalendar("15:00");
+      setHoraFinCalendar("15:30");
+    }
+    setEmailCalendar(lead?.email ?? "");
+    setErrorCalendar("");
+    setCalendarOpen(true);
+  };
+
+  const crearCalendar = trpc.calendar.crearEvento.useMutation({
+    onSuccess: () => {
+      utils.event.timeline.invalidate({ leadId });
+      utils.lead.getById.invalidate({ id: leadId });
+      setCalendarOpen(false);
+    },
+    onError: (err) => setErrorCalendar(err.message),
+  });
+
+  const editarCalendar = trpc.calendar.editarEvento.useMutation({
+    onSuccess: () => {
+      utils.event.timeline.invalidate({ leadId });
+      setCalendarOpen(false);
+    },
+    onError: (err) => setErrorCalendar(err.message),
+  });
+
+  const handleSubmitCalendar = (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorCalendar("");
+    const fechaHoraInicio = new Date(`${fechaCalendar}T${horaInicioCalendar}`).toISOString();
+    const fechaHoraFin = new Date(`${fechaCalendar}T${horaFinCalendar}`).toISOString();
+
+    if (calendarVigente) {
+      editarCalendar.mutate({ leadId, fechaHoraInicio, fechaHoraFin });
+    } else {
+      crearCalendar.mutate({
+        leadId,
+        fechaHoraInicio,
+        fechaHoraFin,
+        titulo: tituloCalendar || `Llamada con ${lead?.nombre || "el lead"}`,
+        email: emailCalendar || undefined,
+      });
+    }
+  };
 
   // Sprint 4: proyecciones de la fase de llamada -- ADMIN/MANAGER (adminQuery)
   // pueden leerlas; el rechazo literal a MANAGER en la mutacion de pago lo
@@ -250,6 +354,74 @@ export default function LeadDetail() {
     NOTA_AGREGADA: "bg-gray-50 text-gray-700",
   };
 
+  const calendarPendiente = crearCalendar.isPending || editarCalendar.isPending;
+
+  const calendarDialogContent = () => (
+    <DialogContent className="max-w-md">
+      <DialogHeader>
+        <DialogTitle>{calendarVigente ? "Editar evento" : "Agendar en Calendar"}</DialogTitle>
+      </DialogHeader>
+      <form onSubmit={handleSubmitCalendar} className="space-y-4 mt-2">
+        {!calendarVigente && (
+          <div className="space-y-2">
+            <Label>Titulo</Label>
+            <Input value={tituloCalendar} onChange={(e) => setTituloCalendar(e.target.value)} required />
+          </div>
+        )}
+        <div className="space-y-2">
+          <Label>Fecha</Label>
+          <Input
+            type="date"
+            value={fechaCalendar}
+            onChange={(e) => setFechaCalendar(e.target.value)}
+            required
+          />
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-2">
+            <Label>Hora inicio</Label>
+            <Input
+              type="time"
+              value={horaInicioCalendar}
+              onChange={(e) => setHoraInicioCalendar(e.target.value)}
+              required
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Hora fin</Label>
+            <Input
+              type="time"
+              value={horaFinCalendar}
+              onChange={(e) => setHoraFinCalendar(e.target.value)}
+              required
+            />
+          </div>
+        </div>
+        {!calendarVigente && (
+          <div className="space-y-2">
+            <Label>Email del lead (opcional)</Label>
+            <Input
+              type="email"
+              placeholder="lead@email.com"
+              value={emailCalendar}
+              onChange={(e) => setEmailCalendar(e.target.value)}
+            />
+            <p className="text-xs text-slate-500">
+              Se guarda en el lead y se usa para invitarlo al evento. Si se deja vacio, el evento
+              se crea sin invitados.
+            </p>
+          </div>
+        )}
+        {errorCalendar && (
+          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{errorCalendar}</p>
+        )}
+        <Button type="submit" className="w-full" disabled={calendarPendiente}>
+          {calendarPendiente ? "Guardando..." : calendarVigente ? "Guardar cambios" : "Agendar"}
+        </Button>
+      </form>
+    </DialogContent>
+  );
+
   if (!lead) {
     return (
       <Layout>
@@ -318,6 +490,64 @@ export default function LeadDetail() {
             </CardContent>
           </Card>
         </div>
+
+        {/* Agendar en Calendar -- Sprint 5. Participan setter y admin por
+            igual (a diferencia de "Fase de llamada", mas abajo, que es solo
+            ADMIN/MANAGER). Se oculta si el lead esta descartado, pero se
+            muestra siempre que no lo este -- incluso antes de C, con el
+            boton deshabilitado y una nota, para que la funcionalidad sea
+            visible aunque todavia no aplique. */}
+        {!lead.descartado && (
+          <div className="space-y-3">
+            <h2 className="text-lg font-bold text-slate-900">Agendar en Calendar</h2>
+            <Card>
+              <CardContent className="p-4 flex items-center justify-between flex-wrap gap-3">
+                {!calendarEstado?.conectado ? (
+                  <p className="text-sm text-slate-500">
+                    Google Calendar no esta conectado. Conectalo desde{" "}
+                    <a href="/calendario" className="text-blue-600 hover:underline">
+                      /calendario
+                    </a>{" "}
+                    para poder agendar.
+                  </p>
+                ) : lead.etapaActual !== "C" && lead.etapaActual !== "D" ? (
+                  <p className="text-sm text-slate-500">
+                    Disponible cuando el lead llegue a la etapa C (setter agenda en el calendario).
+                  </p>
+                ) : calendarVigente ? (
+                  <>
+                    <div className="flex items-center gap-2 text-sm text-slate-700">
+                      <CalendarDays className="w-4 h-4 text-slate-400" />
+                      {formatFechaHoraCorta(calendarVigente.fecha_hora_inicio)} —{" "}
+                      {formatFechaHoraCorta(calendarVigente.fecha_hora_fin)}
+                    </div>
+                    <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" variant="outline" onClick={abrirDialogCalendar}>
+                          Editar
+                        </Button>
+                      </DialogTrigger>
+                      {calendarDialogContent()}
+                    </Dialog>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-slate-500">Sin evento agendado todavia.</p>
+                    <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+                      <DialogTrigger asChild>
+                        <Button size="sm" onClick={abrirDialogCalendar}>
+                          <CalendarDays className="w-4 h-4 mr-2" />
+                          Agendar en Calendar
+                        </Button>
+                      </DialogTrigger>
+                      {calendarDialogContent()}
+                    </Dialog>
+                  </>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
         {/* Fase de llamada -- Sprint 4, solo ADMIN/MANAGER, solo si el lead
             llego a D (02_reglas_de_negocio.md seccion 7). El setter no
