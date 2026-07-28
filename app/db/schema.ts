@@ -3,6 +3,7 @@ import {
   mysqlEnum,
   serial,
   varchar,
+  text,
   timestamp,
   bigint,
   json,
@@ -44,6 +45,11 @@ export const leads = mysqlTable(
     id: serial("id").primaryKey(),
     nombre: varchar("nombre", { length: 255 }).notNull(),
     instagramUsername: varchar("instagram_username", { length: 255 }).notNull(),
+    // Sprint 5: campo propio del Lead (como nombre/instagramUsername, no
+    // event-sourced) -- el scraping no trae email, se carga a mano cuando
+    // hace falta para agendar en Calendar (docs/02_reglas_de_negocio (1).md
+    // seccion 8).
+    email: varchar("email", { length: 320 }),
   },
   (table) => ({
     igIdx: index("ig_username_idx").on(table.instagramUsername),
@@ -72,6 +78,8 @@ export const eventos = mysqlTable(
       "NOTA_AGREGADA",
       "LLAMADA_REGISTRADA",
       "PAGO_REGISTRADO",
+      "CALENDAR_EVENTO_CREADO",
+      "CALENDAR_EVENTO_ACTUALIZADO",
     ]).notNull(),
     leadId: bigint("lead_id", { mode: "number", unsigned: true }).notNull(),
     actorTipo: mysqlEnum("actor_tipo", ["SETTER", "MANAGER", "ADMIN", "SISTEMA"])
@@ -92,3 +100,21 @@ export const eventos = mysqlTable(
 
 export type Evento = typeof eventos.$inferSelect;
 export type InsertEvento = typeof eventos.$inferInsert;
+
+// ─── Google Calendar (Sprint 5) ─────────────────────────────────────────
+// Conexion unica, agencywide (no por-usuario) -- ver
+// docs/02_reglas_de_negocio (1).md seccion 8. Fila unica esperada por
+// convencion de la app, no por constraint de DB (mismo criterio laxo que el
+// resto del schema, sin FKs reales).
+
+export const googleCalendarConnections = mysqlTable("google_calendar_connections", {
+  id: serial("id").primaryKey(),
+  calendarId: varchar("calendar_id", { length: 255 }).notNull().default("primary"),
+  refreshTokenEncrypted: text("refresh_token_encrypted").notNull(),
+  connectedByUserId: bigint("connected_by_user_id", { mode: "number", unsigned: true }).notNull(),
+  connectedAt: timestamp("connected_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow().onUpdateNow(),
+});
+
+export type GoogleCalendarConnection = typeof googleCalendarConnections.$inferSelect;
+export type InsertGoogleCalendarConnection = typeof googleCalendarConnections.$inferInsert;

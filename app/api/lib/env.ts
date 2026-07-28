@@ -14,4 +14,8 @@ export const env = {
   isProduction: process.env.NODE_ENV === "production",
   databaseUrl: required("DATABASE_URL"),
   jwtSecret: required("JWT_SECRET"),
+  googleClientId: required("GOOGLE_CLIENT_ID"),
+  googleClientSecret: required("GOOGLE_CLIENT_SECRET"),
+  googleRedirectUri: required("GOOGLE_REDIRECT_URI"),
+  googleTokenEncryptionKey: required("GOOGLE_TOKEN_ENCRYPTION_KEY"),
 };

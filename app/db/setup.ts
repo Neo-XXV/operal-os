@@ -7,6 +7,7 @@ async function main() {
 
   await conn.execute("SET FOREIGN_KEY_CHECKS = 0");
   await conn.execute("DROP TABLE IF EXISTS eventos");
+  await conn.execute("DROP TABLE IF EXISTS google_calendar_connections");
   await conn.execute("DROP TABLE IF EXISTS leads");
   await conn.execute("DROP TABLE IF EXISTS users");
   await conn.execute("SET FOREIGN_KEY_CHECKS = 1");
@@ -27,19 +28,31 @@ async function main() {
     CREATE TABLE leads (
       id bigint unsigned auto_increment PRIMARY KEY,
       nombre varchar(255) NOT NULL,
-      instagram_username varchar(255) NOT NULL
+      instagram_username varchar(255) NOT NULL,
+      email varchar(320)
     )
   `);
 
   await conn.execute(`
     CREATE TABLE eventos (
       id bigint unsigned auto_increment PRIMARY KEY,
-      tipo enum('LEAD_CREADO', 'LEAD_ASIGNADO', 'ESTADO_CAMBIADO', 'SEGUIMIENTO_ENVIADO', 'RESPUESTA_RECIBIDA', 'OBJECION_REGISTRADA', 'LEAD_DESCARTADO', 'NOTA_AGREGADA', 'LLAMADA_REGISTRADA', 'PAGO_REGISTRADO') NOT NULL,
+      tipo enum('LEAD_CREADO', 'LEAD_ASIGNADO', 'ESTADO_CAMBIADO', 'SEGUIMIENTO_ENVIADO', 'RESPUESTA_RECIBIDA', 'OBJECION_REGISTRADA', 'LEAD_DESCARTADO', 'NOTA_AGREGADA', 'LLAMADA_REGISTRADA', 'PAGO_REGISTRADO', 'CALENDAR_EVENTO_CREADO', 'CALENDAR_EVENTO_ACTUALIZADO') NOT NULL,
       lead_id bigint unsigned NOT NULL,
       actor_tipo enum('SETTER', 'MANAGER', 'ADMIN', 'SISTEMA') NOT NULL,
       actor_id bigint unsigned,
       \`timestamp\` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
       payload json NOT NULL
+    )
+  `);
+
+  await conn.execute(`
+    CREATE TABLE google_calendar_connections (
+      id bigint unsigned auto_increment PRIMARY KEY,
+      calendar_id varchar(255) NOT NULL DEFAULT 'primary',
+      refresh_token_encrypted text NOT NULL,
+      connected_by_user_id bigint unsigned NOT NULL,
+      connected_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
     )
   `);
 

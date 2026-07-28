@@ -1,5 +1,5 @@
 import { relations } from "drizzle-orm";
-import { users, leads, eventos } from "./schema";
+import { users, leads, eventos, googleCalendarConnections } from "./schema";
 
 export const usersRelations = relations(users, ({ many }) => ({
   eventos: many(eventos),
@@ -16,6 +16,13 @@ export const eventosRelations = relations(eventos, ({ one }) => ({
   }),
   actor: one(users, {
     fields: [eventos.actorId],
+    references: [users.id],
+  }),
+}));
+
+export const googleCalendarConnectionsRelations = relations(googleCalendarConnections, ({ one }) => ({
+  connectedBy: one(users, {
+    fields: [googleCalendarConnections.connectedByUserId],
     references: [users.id],
   }),
 }));
