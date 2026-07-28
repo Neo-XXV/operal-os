@@ -23,14 +23,14 @@ const EVENT_TYPE_LABELS: Record<string, string> = {
 };
 
 const eventColors: Record<string, string> = {
-  LEAD_CREADO: "bg-slate-100 text-slate-700",
-  LEAD_ASIGNADO: "bg-indigo-50 text-indigo-700",
-  ESTADO_CAMBIADO: "bg-blue-50 text-blue-700",
-  SEGUIMIENTO_ENVIADO: "bg-amber-50 text-amber-700",
-  RESPUESTA_RECIBIDA: "bg-green-50 text-green-700",
-  OBJECION_REGISTRADA: "bg-orange-50 text-orange-700",
-  LEAD_DESCARTADO: "bg-red-50 text-red-700",
-  NOTA_AGREGADA: "bg-gray-50 text-gray-700",
+  LEAD_CREADO: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  LEAD_ASIGNADO: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+  ESTADO_CAMBIADO: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  SEGUIMIENTO_ENVIADO: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  RESPUESTA_RECIBIDA: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
+  OBJECION_REGISTRADA: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+  LEAD_DESCARTADO: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+  NOTA_AGREGADA: "bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
 };
 
 export default function EventLog() {
@@ -45,8 +45,8 @@ export default function EventLog() {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Event Log</h1>
-            <p className="text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold text-foreground">Event Log</h1>
+            <p className="text-muted-foreground mt-1">
               Registro completo de eventos del sistema
             </p>
           </div>
@@ -68,13 +68,13 @@ export default function EventLog() {
         </div>
 
         {isLoading ? (
-          <div className="text-center py-12 text-slate-500">
+          <div className="text-center py-12 text-muted-foreground">
             Cargando eventos...
           </div>
         ) : !events || events.length === 0 ? (
           <Card>
-            <CardContent className="py-12 text-center text-slate-500 flex flex-col items-center gap-2">
-              <ClipboardList className="w-8 h-8 text-slate-300" />
+            <CardContent className="py-12 text-center text-muted-foreground flex flex-col items-center gap-2">
+              <ClipboardList className="w-8 h-8 text-muted-foreground/50" />
               No hay eventos registrados
             </CardContent>
           </Card>
@@ -88,25 +88,25 @@ export default function EventLog() {
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                            eventColors[ev.tipo] ?? "bg-slate-100 text-slate-700"
+                            eventColors[ev.tipo] ?? "bg-muted text-foreground"
                           }`}
                         >
                           {EVENT_TYPE_LABELS[ev.tipo] ?? ev.tipo}
                         </span>
                         {ev.lead && (
-                          <span className="text-xs text-slate-500">
+                          <span className="text-xs text-muted-foreground">
                             {ev.lead.nombre} (@{ev.lead.instagramUsername})
                           </span>
                         )}
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-muted-foreground">
                           por {ev.actor?.nombre ?? ev.actorTipo}
                         </span>
                       </div>
-                      <pre className="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg overflow-x-auto">
+                      <pre className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-lg overflow-x-auto">
                         {JSON.stringify(ev.payload, null, 2)}
                       </pre>
                     </div>
-                    <span className="text-xs text-slate-400 whitespace-nowrap">
+                    <span className="text-xs text-muted-foreground whitespace-nowrap">
                       {ev.timestamp
                         ? new Date(ev.timestamp).toLocaleString("es-AR")
                         : ""}

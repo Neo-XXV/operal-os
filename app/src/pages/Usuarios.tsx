@@ -63,8 +63,8 @@ export default function Usuarios() {
       <div className="space-y-6">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-slate-900">Usuarios</h1>
-            <p className="text-slate-500 mt-1">
+            <h1 className="text-2xl font-bold text-foreground">Usuarios</h1>
+            <p className="text-muted-foreground mt-1">
               Gestion de usuarios del sistema
             </p>
           </div>
@@ -120,7 +120,7 @@ export default function Usuarios() {
                   </Select>
                 </div>
                 {error && (
-                  <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                  <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">
                     {error}
                   </p>
                 )}
@@ -139,34 +139,34 @@ export default function Usuarios() {
         <Card>
           <CardContent className="p-0">
             {isLoading ? (
-              <div className="p-8 text-center text-slate-500">
+              <div className="p-8 text-center text-muted-foreground">
                 Cargando usuarios...
               </div>
             ) : !users || users.length === 0 ? (
-              <div className="p-8 text-center text-slate-500">
+              <div className="p-8 text-center text-muted-foreground">
                 No hay usuarios registrados
               </div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-slate-200 bg-slate-50">
-                      <th className="text-left py-3 px-4 font-medium text-slate-500">
+                    <tr className="border-b border-border bg-muted/50">
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                         Nombre
                       </th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-500">
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                         Email
                       </th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-500">
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                         Rol
                       </th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-500">
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                         Estado
                       </th>
-                      <th className="text-left py-3 px-4 font-medium text-slate-500">
+                      <th className="text-left py-3 px-4 font-medium text-muted-foreground">
                         Registro
                       </th>
-                      <th className="text-right py-3 px-4 font-medium text-slate-500">
+                      <th className="text-right py-3 px-4 font-medium text-muted-foreground">
                         Acciones
                       </th>
                     </tr>
@@ -175,12 +175,12 @@ export default function Usuarios() {
                     {users.map((u) => (
                       <tr
                         key={u.id}
-                        className="border-b border-slate-100 hover:bg-slate-50"
+                        className="border-b border-border hover:bg-muted/50"
                       >
                         <td className="py-3 px-4 font-medium">{u.nombre}</td>
-                        <td className="py-3 px-4 text-slate-500">{u.email}</td>
+                        <td className="py-3 px-4 text-muted-foreground">{u.email}</td>
                         <td className="py-3 px-4">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 capitalize">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground capitalize">
                             {u.rol.toLowerCase()}
                           </span>
                         </td>
@@ -197,7 +197,7 @@ export default function Usuarios() {
                             </span>
                           )}
                         </td>
-                        <td className="py-3 px-4 text-slate-400 text-xs">
+                        <td className="py-3 px-4 text-muted-foreground text-xs">
                           {u.createdAt
                             ? new Date(u.createdAt).toLocaleDateString("es-AR")
                             : "-"}

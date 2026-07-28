@@ -36,16 +36,16 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-slate-50 px-4">
+    <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <Card className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
-            <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center">
-              <Activity className="w-6 h-6 text-white" />
+            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
+              <Activity className="w-6 h-6 text-primary-foreground" />
             </div>
           </div>
           <CardTitle className="text-2xl font-bold">OPERAL OS</CardTitle>
-          <p className="text-sm text-slate-500">Sistema de gestion de leads</p>
+          <p className="text-sm text-muted-foreground">Sistema de gestion de leads</p>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -70,7 +70,7 @@ export default function Login() {
               />
             </div>
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+              <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">
                 {error}
               </p>
             )}
