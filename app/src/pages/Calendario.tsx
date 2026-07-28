@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { CalendarDays, CheckCircle2, XCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, parse, startOfWeek, startOfMonth, endOfMonth, getDay } from "date-fns";
 import { es } from "date-fns/locale";
+import { Calendar as BigCalendar, dateFnsLocalizer, type View } from "react-big-calendar";
+import "react-big-calendar/lib/css/react-big-calendar.css";
 
 // Lunes como inicio de semana (convencion local, no domingo).
 function inicioSemana(d: Date) {
@@ -20,6 +23,14 @@ function inicioSemana(d: Date) {
   return inicio;
 }
 
+const localizer = dateFnsLocalizer({
+  format,
+  parse,
+  startOfWeek: (date: Date) => startOfWeek(date, { locale: es }),
+  getDay,
+  locales: { es },
+});
+
 const MENSAJES_ERROR: Record<string, string> = {
   unauthorized: "Tu sesion no es valida. Volve a iniciar sesion e intenta de nuevo.",
   forbidden: "Solo un ADMIN o MANAGER puede conectar Google Calendar.",
@@ -30,6 +41,104 @@ const MENSAJES_ERROR: Record<string, string> = {
   token_exchange_failed: "No se pudo completar la conexion con Google. Intenta de nuevo.",
   denied: "Cancelaste la conexion con Google.",
 };
+
+type EventoLocalCalendario = {
+  title: string;
+  start: Date;
+  end: Date;
+  resource: { leadId: number; leadNombre: string; googleEventId: string | null };
+};
+
+// Agenda propia de OPERAL OS -- lee calendar.listarEventosLocales, nunca
+// llama a Google. Es el evento canonico (docs/02_reglas_de_negocio (1).md
+// seccion 8), asi que esta pestaña funciona con o sin conexion.
+function AgendaOperal() {
+  const navigate = useNavigate();
+  const [rango, setRango] = useState(() => ({
+    desde: startOfMonth(new Date()),
+    hasta: endOfMonth(new Date()),
+  }));
+  const [vista, setVista] = useState<View>("week");
+
+  const { data: eventosLocales, isLoading, error } = trpc.calendar.listarEventosLocales.useQuery({
+    desde: rango.desde.toISOString(),
+    hasta: rango.hasta.toISOString(),
+  });
+
+  const eventosCalendario: EventoLocalCalendario[] = useMemo(
+    () =>
+      (eventosLocales ?? []).map((ev) => ({
+        title: ev.titulo,
+        start: new Date(ev.fechaHoraInicio),
+        end: new Date(ev.fechaHoraFin),
+        resource: { leadId: ev.leadId, leadNombre: ev.leadNombre, googleEventId: ev.googleEventId },
+      })),
+    [eventosLocales],
+  );
+
+  const handleRangeChange = (range: Date[] | { start: Date; end: Date }) => {
+    if (Array.isArray(range)) {
+      if (range.length === 0) return;
+      setRango({ desde: range[0], hasta: range[range.length - 1] });
+    } else {
+      setRango({ desde: range.start, hasta: range.end });
+    }
+  };
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="py-10 text-center">
+          <p className="text-sm text-red-600">{error.message}</p>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      {isLoading && <p className="text-sm text-slate-500">Cargando agenda...</p>}
+      <style>{`
+        .operal-calendar .rbc-event { background-color: #2563eb; border-radius: 6px; border: none; }
+        .operal-calendar .rbc-event.rbc-selected { background-color: #1d4ed8; }
+        .operal-calendar .rbc-today { background-color: #eff6ff; }
+        .operal-calendar .rbc-toolbar button { border-radius: 6px; }
+        .operal-calendar .rbc-toolbar button.rbc-active { background-color: #0f172a; color: white; }
+      `}</style>
+      <div className="operal-calendar" style={{ height: 650 }}>
+        <BigCalendar
+          localizer={localizer}
+          culture="es"
+          events={eventosCalendario}
+          startAccessor="start"
+          endAccessor="end"
+          views={["month", "week", "day"]}
+          view={vista}
+          onView={setVista}
+          onRangeChange={handleRangeChange}
+          onSelectEvent={(event) => navigate(`/leads/${event.resource.leadId}`)}
+          eventPropGetter={(event) => ({
+            style: event.resource.googleEventId ? undefined : { backgroundColor: "#94a3b8" },
+          })}
+          messages={{
+            next: "Sig.",
+            previous: "Ant.",
+            today: "Hoy",
+            month: "Mes",
+            week: "Semana",
+            day: "Día",
+            noEventsInRange: "Sin eventos agendados en este rango.",
+            showMore: (total) => `+${total} más`,
+          }}
+        />
+      </div>
+      <p className="text-xs text-slate-400 flex items-center gap-1.5">
+        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-slate-400" />
+        Sin sincronizar con Google
+      </p>
+    </div>
+  );
+}
 
 export default function Calendario() {
   const { isAdmin } = useAuth();
@@ -99,7 +208,7 @@ export default function Calendario() {
         <div>
           <h1 className="text-2xl font-bold text-slate-900">Calendario</h1>
           <p className="text-slate-500 mt-1">
-            Agenda de llamadas — sincronizada con Google Calendar
+            Agenda de llamadas — el calendario de OPERAL OS es siempre la fuente confiable; Google Calendar es un espejo opcional
           </p>
         </div>
 
@@ -116,7 +225,7 @@ export default function Calendario() {
             ) : (
               <div className="flex items-center gap-2 text-sm text-slate-500">
                 <XCircle className="w-4 h-4 text-slate-400" />
-                Google Calendar no esta conectado
+                Google Calendar no esta conectado — la agenda de OPERAL OS funciona igual
               </div>
             )}
 
@@ -142,79 +251,100 @@ export default function Calendario() {
           </CardContent>
         </Card>
 
-        {estado?.conectado && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Button variant="ghost" size="sm" onClick={() => setSemanaOffset((s) => s - 1)}>
-                  <ChevronLeft className="w-4 h-4" />
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setSemanaOffset(0)} disabled={semanaOffset === 0}>
-                  Hoy
-                </Button>
-                <Button variant="ghost" size="sm" onClick={() => setSemanaOffset((s) => s + 1)}>
-                  <ChevronRight className="w-4 h-4" />
-                </Button>
-              </div>
-              <p className="text-sm text-slate-500">
-                {format(inicio, "d 'de' MMMM", { locale: es })} —{" "}
-                {format(new Date(fin.getTime() - 1), "d 'de' MMMM", { locale: es })}
-              </p>
-            </div>
+        <Tabs defaultValue="operal">
+          <TabsList>
+            <TabsTrigger value="operal">Agenda OPERAL</TabsTrigger>
+            <TabsTrigger value="google">Google Calendar</TabsTrigger>
+          </TabsList>
 
-            {agendaLoading ? (
-              <p className="text-sm text-slate-500">Cargando agenda...</p>
-            ) : agendaError ? (
+          <TabsContent value="operal" className="mt-4">
+            <AgendaOperal />
+          </TabsContent>
+
+          <TabsContent value="google" className="mt-4">
+            {!estado?.conectado ? (
               <Card>
                 <CardContent className="py-10 text-center">
-                  <p className="text-sm text-red-600">{agendaError.message}</p>
-                </CardContent>
-              </Card>
-            ) : porDia.length === 0 ? (
-              <Card>
-                <CardContent className="py-10 text-center">
-                  <p className="text-sm text-slate-400">Sin eventos agendados esta semana.</p>
+                  <p className="text-sm text-slate-400">
+                    Conecta Google Calendar para ver esta vista.
+                  </p>
                 </CardContent>
               </Card>
             ) : (
               <div className="space-y-4">
-                {porDia.map(([dia, eventosDia]) => (
-                  <div key={dia}>
-                    <h3 className="text-sm font-semibold text-slate-700 mb-2 capitalize">
-                      {format(new Date(`${dia}T00:00:00`), "EEEE d 'de' MMMM", { locale: es })}
-                    </h3>
-                    <div className="space-y-2">
-                      {eventosDia.map((ev) => (
-                        <Card key={ev.id}>
-                          <CardContent className="p-3 flex items-center justify-between gap-3">
-                            <div className="flex items-center gap-3 min-w-0">
-                              <span className="text-sm text-slate-500 whitespace-nowrap">
-                                {format(new Date(ev.inicio), "HH:mm")}–{format(new Date(ev.fin), "HH:mm")}
-                              </span>
-                              <span className="text-sm font-medium text-slate-900 truncate">{ev.titulo}</span>
-                            </div>
-                            {ev.esOperalLead && ev.leadId ? (
-                              <Link
-                                to={`/leads/${ev.leadId}`}
-                                className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 hover:bg-green-100 whitespace-nowrap"
-                              >
-                                {ev.leadNombre}
-                              </Link>
-                            ) : (
-                              <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 whitespace-nowrap">
-                                Externo
-                              </span>
-                            )}
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Button variant="ghost" size="sm" onClick={() => setSemanaOffset((s) => s - 1)}>
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSemanaOffset(0)} disabled={semanaOffset === 0}>
+                      Hoy
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setSemanaOffset((s) => s + 1)}>
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
                   </div>
-                ))}
+                  <p className="text-sm text-slate-500">
+                    {format(inicio, "d 'de' MMMM", { locale: es })} —{" "}
+                    {format(new Date(fin.getTime() - 1), "d 'de' MMMM", { locale: es })}
+                  </p>
+                </div>
+
+                {agendaLoading ? (
+                  <p className="text-sm text-slate-500">Cargando agenda...</p>
+                ) : agendaError ? (
+                  <Card>
+                    <CardContent className="py-10 text-center">
+                      <p className="text-sm text-red-600">{agendaError.message}</p>
+                    </CardContent>
+                  </Card>
+                ) : porDia.length === 0 ? (
+                  <Card>
+                    <CardContent className="py-10 text-center">
+                      <p className="text-sm text-slate-400">Sin eventos agendados esta semana.</p>
+                    </CardContent>
+                  </Card>
+                ) : (
+                  <div className="space-y-4">
+                    {porDia.map(([dia, eventosDia]) => (
+                      <div key={dia}>
+                        <h3 className="text-sm font-semibold text-slate-700 mb-2 capitalize">
+                          {format(new Date(`${dia}T00:00:00`), "EEEE d 'de' MMMM", { locale: es })}
+                        </h3>
+                        <div className="space-y-2">
+                          {eventosDia.map((ev) => (
+                            <Card key={ev.id}>
+                              <CardContent className="p-3 flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 min-w-0">
+                                  <span className="text-sm text-slate-500 whitespace-nowrap">
+                                    {format(new Date(ev.inicio), "HH:mm")}–{format(new Date(ev.fin), "HH:mm")}
+                                  </span>
+                                  <span className="text-sm font-medium text-slate-900 truncate">{ev.titulo}</span>
+                                </div>
+                                {ev.esOperalLead && ev.leadId ? (
+                                  <Link
+                                    to={`/leads/${ev.leadId}`}
+                                    className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 hover:bg-green-100 whitespace-nowrap"
+                                  >
+                                    {ev.leadNombre}
+                                  </Link>
+                                ) : (
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 whitespace-nowrap">
+                                    Externo
+                                  </span>
+                                )}
+                              </CardContent>
+                            </Card>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
   );

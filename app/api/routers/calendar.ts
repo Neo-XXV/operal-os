@@ -300,6 +300,17 @@ export const calendarRouter = createRouter({
         }
       }
 
+      // Un lead descartado despues de agendar no debe seguir apareciendo en
+      // la agenda -- mismo criterio que leadsParaLlamar (Sprint 4), que
+      // tampoco muestra leads descartados en sus listas operativas.
+      const leadIds = [...vigentePorLead.keys()];
+      const descartes = leadIds.length
+        ? await db.query.eventos.findMany({
+            where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "LEAD_DESCARTADO")),
+          })
+        : [];
+      const leadsDescartados = new Set(descartes.map((d) => d.leadId));
+
       const resultado: {
         leadId: number;
         leadNombre: string;
@@ -309,7 +320,7 @@ export const calendarRouter = createRouter({
         googleEventId: string | null;
       }[] = [];
       for (const ev of vigentePorLead.values()) {
-        if (!ev.lead) continue;
+        if (!ev.lead || leadsDescartados.has(ev.leadId)) continue;
         const payload = ev.payload as CalendarEventoPayload;
         if (payload.fecha_hora_inicio < input.desde || payload.fecha_hora_inicio > input.hasta) continue;
         resultado.push({
