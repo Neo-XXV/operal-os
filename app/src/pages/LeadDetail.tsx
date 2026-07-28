@@ -23,6 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { ArrowLeft, Plus, Send, MessageSquare, AlertTriangle, StickyNote, XCircle, CalendarDays } from "lucide-react";
+import { toast } from "sonner";
 
 type LlamadaPayload = {
   numero: number;
@@ -41,7 +42,7 @@ type LlamadaPayload = {
 type PagoPayload = { monto: number; moneda: string; fecha_pago: string; nota?: string };
 
 type CalendarEventoPayload = {
-  google_event_id: string;
+  google_event_id: string | null;
   fecha_hora_inicio: string;
   fecha_hora_fin: string;
   titulo?: string;
@@ -137,11 +138,15 @@ export default function LeadDetail() {
   // (1).md seccion 8), asi que no va gateado por isAdmin.
   const { data: calendarEstado } = trpc.calendar.estado.useQuery();
 
-  // "Vigente" = el mas reciente CALENDAR_EVENTO_CREADO/ACTUALIZADO del lead
-  // -- timeline ya viene ordenado desc por [timestamp, id], asi que el
-  // primer match es el vigente sin necesidad de ordenar de nuevo.
+  // "Vigente" = el mas reciente CALENDAR_EVENTO_CREADO/ACTUALIZADO/
+  // SINCRONIZADO del lead -- timeline ya viene ordenado desc por
+  // [timestamp, id], asi que el primer match es el vigente sin necesidad de
+  // ordenar de nuevo.
   const calendarVigenteEv = (timeline ?? []).find(
-    (ev) => ev.tipo === "CALENDAR_EVENTO_CREADO" || ev.tipo === "CALENDAR_EVENTO_ACTUALIZADO",
+    (ev) =>
+      ev.tipo === "CALENDAR_EVENTO_CREADO" ||
+      ev.tipo === "CALENDAR_EVENTO_ACTUALIZADO" ||
+      ev.tipo === "CALENDAR_EVENTO_SINCRONIZADO",
   );
   const calendarVigente = calendarVigenteEv
     ? (calendarVigenteEv.payload as CalendarEventoPayload)
@@ -173,21 +178,38 @@ export default function LeadDetail() {
     setCalendarOpen(true);
   };
 
+  // El evento local se guarda siempre, aunque Google falle -- syncWarning es
+  // un aviso no bloqueante (exito parcial), nunca el error del banner del
+  // formulario (docs/02_reglas_de_negocio (1).md seccion 8).
   const crearCalendar = trpc.calendar.crearEvento.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       utils.event.timeline.invalidate({ leadId });
       utils.lead.getById.invalidate({ id: leadId });
       setCalendarOpen(false);
+      if (data.syncWarning) {
+        toast.warning(`Se guardó en OPERAL OS, pero no se pudo sincronizar con Google: ${data.syncWarning}`);
+      }
     },
     onError: (err) => setErrorCalendar(err.message),
   });
 
   const editarCalendar = trpc.calendar.editarEvento.useMutation({
-    onSuccess: () => {
+    onSuccess: (data) => {
       utils.event.timeline.invalidate({ leadId });
       setCalendarOpen(false);
+      if (data.syncWarning) {
+        toast.warning(`Se guardó en OPERAL OS, pero no se pudo sincronizar con Google: ${data.syncWarning}`);
+      }
     },
     onError: (err) => setErrorCalendar(err.message),
+  });
+
+  const sincronizarCalendar = trpc.calendar.sincronizarEvento.useMutation({
+    onSuccess: () => {
+      toast.success("Evento sincronizado con Google Calendar");
+      utils.event.timeline.invalidate({ leadId });
+    },
+    onError: (err) => toast.error(err.message),
   });
 
   const handleSubmitCalendar = (e: React.FormEvent) => {
@@ -491,26 +513,22 @@ export default function LeadDetail() {
           </Card>
         </div>
 
-        {/* Agendar en Calendar -- Sprint 5. Participan setter y admin por
+        {/* Agendar en Calendar -- Sprint 5/5b. Participan setter y admin por
             igual (a diferencia de "Fase de llamada", mas abajo, que es solo
             ADMIN/MANAGER). Se oculta si el lead esta descartado, pero se
-            muestra siempre que no lo este -- incluso antes de C, con el
-            boton deshabilitado y una nota, para que la funcionalidad sea
-            visible aunque todavia no aplique. */}
+            muestra siempre que no lo este -- incluso antes de C, con una
+            nota, para que la funcionalidad sea visible aunque todavia no
+            aplique. El evento local es el canonico (docs/02_reglas_de_negocio
+            (1).md seccion 8): agendar/editar funciona CON O SIN conexion a
+            Google -- la conexion ya no es un gate, solo determina si ademas
+            se sincroniza. */}
         {!lead.descartado && (
           <div className="space-y-3">
             <h2 className="text-lg font-bold text-slate-900">Agendar en Calendar</h2>
             <Card>
-              <CardContent className="p-4 flex items-center justify-between flex-wrap gap-3">
-                {!calendarEstado?.conectado ? (
-                  <p className="text-sm text-slate-500">
-                    Google Calendar no esta conectado. Conectalo desde{" "}
-                    <a href="/calendario" className="text-blue-600 hover:underline">
-                      /calendario
-                    </a>{" "}
-                    para poder agendar.
-                  </p>
-                ) : lead.etapaActual !== "C" && lead.etapaActual !== "D" ? (
+              <CardContent className="p-4 space-y-2">
+                <div className="flex items-center justify-between flex-wrap gap-3">
+                {lead.etapaActual !== "C" && lead.etapaActual !== "D" ? (
                   <p className="text-sm text-slate-500">
                     Disponible cuando el lead llegue a la etapa C (setter agenda en el calendario).
                   </p>
@@ -520,15 +538,32 @@ export default function LeadDetail() {
                       <CalendarDays className="w-4 h-4 text-slate-400" />
                       {formatFechaHoraCorta(calendarVigente.fecha_hora_inicio)} —{" "}
                       {formatFechaHoraCorta(calendarVigente.fecha_hora_fin)}
+                      {!calendarVigente.google_event_id && (
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                          Sin sincronizar
+                        </span>
+                      )}
                     </div>
-                    <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
-                      <DialogTrigger asChild>
-                        <Button size="sm" variant="outline" onClick={abrirDialogCalendar}>
-                          Editar
+                    <div className="flex gap-2">
+                      {!calendarVigente.google_event_id && calendarEstado?.conectado && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => sincronizarCalendar.mutate({ leadId })}
+                          disabled={sincronizarCalendar.isPending}
+                        >
+                          {sincronizarCalendar.isPending ? "Sincronizando..." : "Sincronizar con Google"}
                         </Button>
-                      </DialogTrigger>
-                      {calendarDialogContent()}
-                    </Dialog>
+                      )}
+                      <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
+                        <DialogTrigger asChild>
+                          <Button size="sm" variant="outline" onClick={abrirDialogCalendar}>
+                            Editar
+                          </Button>
+                        </DialogTrigger>
+                        {calendarDialogContent()}
+                      </Dialog>
+                    </div>
                   </>
                 ) : (
                   <>
@@ -543,6 +578,16 @@ export default function LeadDetail() {
                       {calendarDialogContent()}
                     </Dialog>
                   </>
+                )}
+                </div>
+                {!calendarEstado?.conectado && (lead.etapaActual === "C" || lead.etapaActual === "D") && (
+                  <p className="text-xs text-slate-400">
+                    Google Calendar no esta conectado — el evento se guarda igual en OPERAL OS.{" "}
+                    <a href="/calendario" className="text-blue-600 hover:underline">
+                      Conectalo
+                    </a>{" "}
+                    para que ademas se sincronice.
+                  </p>
                 )}
               </CardContent>
             </Card>
