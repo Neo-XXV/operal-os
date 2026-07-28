@@ -15,6 +15,13 @@
       "when": 1785201772177,
       "tag": "0001_faithful_bruce_banner",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1785271599464,
+      "tag": "0002_cloudy_starfox",
+      "breakpoints": true
     }
   ]
 }
