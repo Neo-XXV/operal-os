@@ -89,7 +89,7 @@ function AgendaOperal() {
     return (
       <Card>
         <CardContent className="py-10 text-center">
-          <p className="text-sm text-red-600">{error.message}</p>
+          <p className="text-sm text-destructive">{error.message}</p>
         </CardContent>
       </Card>
     );
@@ -97,13 +97,52 @@ function AgendaOperal() {
 
   return (
     <div className="space-y-2">
-      {isLoading && <p className="text-sm text-slate-500">Cargando agenda...</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Cargando agenda...</p>}
       <style>{`
         .operal-calendar .rbc-event { background-color: #2563eb; border-radius: 6px; border: none; }
         .operal-calendar .rbc-event.rbc-selected { background-color: #1d4ed8; }
         .operal-calendar .rbc-today { background-color: #eff6ff; }
         .operal-calendar .rbc-toolbar button { border-radius: 6px; }
         .operal-calendar .rbc-toolbar button.rbc-active { background-color: #0f172a; color: white; }
+
+        /* react-big-calendar trae su propio CSS pensado para pagina clara --
+           no reacciona solo al modo oscuro (no usa variables CSS). Se
+           reescriben los colores de chrome (grillas, bordes, toolbar) con
+           las mismas variables del tema que usa el resto de la app, scoped
+           bajo .dark para no afectar el modo claro. */
+        .dark .operal-calendar { color: hsl(var(--foreground)); }
+        .dark .operal-calendar .rbc-off-range-bg { background-color: hsl(var(--muted) / 0.4); }
+        .dark .operal-calendar .rbc-off-range { color: hsl(var(--muted-foreground)); }
+        .dark .operal-calendar .rbc-today { background-color: hsl(var(--accent)); }
+        .dark .operal-calendar .rbc-header,
+        .dark .operal-calendar .rbc-month-view,
+        .dark .operal-calendar .rbc-time-view,
+        .dark .operal-calendar .rbc-time-header-content,
+        .dark .operal-calendar .rbc-time-content,
+        .dark .operal-calendar .rbc-day-bg,
+        .dark .operal-calendar .rbc-month-row,
+        .dark .operal-calendar .rbc-timeslot-group,
+        .dark .operal-calendar .rbc-time-gutter,
+        .dark .operal-calendar .rbc-time-slot,
+        .dark .operal-calendar .rbc-agenda-view table.rbc-agenda-table {
+          border-color: hsl(var(--border));
+        }
+        .dark .operal-calendar .rbc-header,
+        .dark .operal-calendar .rbc-toolbar-label,
+        .dark .operal-calendar .rbc-date-cell {
+          color: hsl(var(--foreground));
+        }
+        .dark .operal-calendar .rbc-toolbar button {
+          color: hsl(var(--foreground));
+          border-color: hsl(var(--border));
+          background-color: hsl(var(--card));
+        }
+        .dark .operal-calendar .rbc-toolbar button:hover { background-color: hsl(var(--accent)); }
+        .dark .operal-calendar .rbc-toolbar button.rbc-active {
+          background-color: hsl(var(--primary));
+          color: hsl(var(--primary-foreground));
+        }
+        .dark .operal-calendar .rbc-show-more { color: hsl(var(--primary)); background-color: transparent; }
       `}</style>
       <div className="operal-calendar" style={{ height: 650 }}>
         <BigCalendar
@@ -132,7 +171,7 @@ function AgendaOperal() {
           }}
         />
       </div>
-      <p className="text-xs text-slate-400 flex items-center gap-1.5">
+      <p className="text-xs text-muted-foreground flex items-center gap-1.5">
         <span className="inline-block w-2.5 h-2.5 rounded-sm bg-slate-400" />
         Sin sincronizar con Google
       </p>
@@ -206,8 +245,8 @@ export default function Calendario() {
     <Layout>
       <div className="space-y-6">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Calendario</h1>
-          <p className="text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Calendario</h1>
+          <p className="text-muted-foreground mt-1">
             Agenda de llamadas — el calendario de OPERAL OS es siempre la fuente confiable; Google Calendar es un espejo opcional
           </p>
         </div>
@@ -215,16 +254,16 @@ export default function Calendario() {
         <Card>
           <CardContent className="p-4 flex items-center justify-between flex-wrap gap-3">
             {isLoading ? (
-              <p className="text-sm text-slate-500">Verificando conexion...</p>
+              <p className="text-sm text-muted-foreground">Verificando conexion...</p>
             ) : estado?.conectado ? (
-              <div className="flex items-center gap-2 text-sm text-slate-700">
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <div className="flex items-center gap-2 text-sm text-foreground">
+                <CheckCircle2 className="w-4 h-4 text-green-600 dark:text-green-400" />
                 Conectado por {estado.conectadoPor.nombre} el{" "}
                 {new Date(estado.conectadoEn).toLocaleDateString("es-AR")}
               </div>
             ) : (
-              <div className="flex items-center gap-2 text-sm text-slate-500">
-                <XCircle className="w-4 h-4 text-slate-400" />
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <XCircle className="w-4 h-4 text-muted-foreground" />
                 Google Calendar no esta conectado — la agenda de OPERAL OS funciona igual
               </div>
             )}
@@ -265,7 +304,7 @@ export default function Calendario() {
             {!estado?.conectado ? (
               <Card>
                 <CardContent className="py-10 text-center">
-                  <p className="text-sm text-slate-400">
+                  <p className="text-sm text-muted-foreground">
                     Conecta Google Calendar para ver esta vista.
                   </p>
                 </CardContent>
@@ -284,31 +323,31 @@ export default function Calendario() {
                       <ChevronRight className="w-4 h-4" />
                     </Button>
                   </div>
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-muted-foreground">
                     {format(inicio, "d 'de' MMMM", { locale: es })} —{" "}
                     {format(new Date(fin.getTime() - 1), "d 'de' MMMM", { locale: es })}
                   </p>
                 </div>
 
                 {agendaLoading ? (
-                  <p className="text-sm text-slate-500">Cargando agenda...</p>
+                  <p className="text-sm text-muted-foreground">Cargando agenda...</p>
                 ) : agendaError ? (
                   <Card>
                     <CardContent className="py-10 text-center">
-                      <p className="text-sm text-red-600">{agendaError.message}</p>
+                      <p className="text-sm text-destructive">{agendaError.message}</p>
                     </CardContent>
                   </Card>
                 ) : porDia.length === 0 ? (
                   <Card>
                     <CardContent className="py-10 text-center">
-                      <p className="text-sm text-slate-400">Sin eventos agendados esta semana.</p>
+                      <p className="text-sm text-muted-foreground">Sin eventos agendados esta semana.</p>
                     </CardContent>
                   </Card>
                 ) : (
                   <div className="space-y-4">
                     {porDia.map(([dia, eventosDia]) => (
                       <div key={dia}>
-                        <h3 className="text-sm font-semibold text-slate-700 mb-2 capitalize">
+                        <h3 className="text-sm font-semibold text-foreground mb-2 capitalize">
                           {format(new Date(`${dia}T00:00:00`), "EEEE d 'de' MMMM", { locale: es })}
                         </h3>
                         <div className="space-y-2">
@@ -316,20 +355,20 @@ export default function Calendario() {
                             <Card key={ev.id}>
                               <CardContent className="p-3 flex items-center justify-between gap-3">
                                 <div className="flex items-center gap-3 min-w-0">
-                                  <span className="text-sm text-slate-500 whitespace-nowrap">
+                                  <span className="text-sm text-muted-foreground whitespace-nowrap">
                                     {format(new Date(ev.inicio), "HH:mm")}–{format(new Date(ev.fin), "HH:mm")}
                                   </span>
-                                  <span className="text-sm font-medium text-slate-900 truncate">{ev.titulo}</span>
+                                  <span className="text-sm font-medium text-foreground truncate">{ev.titulo}</span>
                                 </div>
                                 {ev.esOperalLead && ev.leadId ? (
                                   <Link
                                     to={`/leads/${ev.leadId}`}
-                                    className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 hover:bg-green-100 whitespace-nowrap"
+                                    className="text-xs font-medium px-2 py-0.5 rounded-full bg-green-50 text-green-700 hover:bg-green-100 dark:bg-green-950 dark:text-green-300 dark:hover:bg-green-900 whitespace-nowrap"
                                   >
                                     {ev.leadNombre}
                                   </Link>
                                 ) : (
-                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 whitespace-nowrap">
+                                  <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-muted text-muted-foreground whitespace-nowrap">
                                     Externo
                                   </span>
                                 )}
