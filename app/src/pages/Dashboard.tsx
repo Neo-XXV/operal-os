@@ -33,9 +33,12 @@ const STATUS = {
   critical: "#e66767",
   good: "#0ca30c",
 };
+// Referencias a las variables CSS del tema (no hex fijo) -- el grid y el
+// texto de los ejes tienen que invertirse entre claro/oscuro, a diferencia
+// de los colores categoricos/de status (decorativos, fijos en ambos modos).
 const CHROME = {
-  gridline: "#2c2838",
-  muted: "#8b87a3",
+  gridline: "hsl(var(--border))",
+  muted: "hsl(var(--muted-foreground))",
 };
 
 // Forma "emphasis" (skill dataviz): una serie es el punto, el resto es
@@ -110,7 +113,7 @@ function CeldaTasa({
   return (
     <td
       className={`text-right p-3 tabular-nums ${
-        resaltada ? "font-semibold" : "text-slate-300"
+        resaltada ? "font-semibold" : "text-muted-foreground"
       }`}
       style={resaltada ? { backgroundColor: `${STATUS.warning}1a`, color: STATUS.warning } : undefined}
       title={
@@ -120,7 +123,7 @@ function CeldaTasa({
       }
     >
       {formatPct(valor)}
-      <span className="text-slate-500 text-xs ml-1 font-normal">
+      <span className="text-muted-foreground text-xs ml-1 font-normal">
         ({conteos[num]}/{conteos[den]})
       </span>
     </td>
@@ -144,7 +147,7 @@ function DeltaConteo({
   onGradient?: boolean;
 }) {
   if (anterior === null) {
-    return <span className={`text-xs ${onGradient ? "text-white/70" : "text-slate-400"}`}>Sin dato previo</span>;
+    return <span className={`text-xs ${onGradient ? "text-white/70" : "text-muted-foreground"}`}>Sin dato previo</span>;
   }
   const delta = actual - anterior;
   return <DeltaVisual delta={delta} invertido={invertido} texto={`${delta > 0 ? "+" : ""}${delta}`} onGradient={onGradient} />;
@@ -152,7 +155,7 @@ function DeltaConteo({
 
 function DeltaTasa({ actual, anterior }: { actual: number | null; anterior: number | null }) {
   if (actual === null || anterior === null) {
-    return <span className="text-xs text-slate-400">Sin dato previo</span>;
+    return <span className="text-xs text-muted-foreground">Sin dato previo</span>;
   }
   const deltaPuntos = Math.round((actual - anterior) * 100);
   return <DeltaVisual delta={deltaPuntos} invertido={false} texto={`${deltaPuntos > 0 ? "+" : ""}${deltaPuntos}pp`} />;
@@ -171,7 +174,7 @@ function DeltaVisual({
 }) {
   if (delta === 0) {
     return (
-      <span className={`text-xs flex items-center gap-1 ${onGradient ? "text-white/70" : "text-slate-400"}`}>
+      <span className={`text-xs flex items-center gap-1 ${onGradient ? "text-white/70" : "text-muted-foreground"}`}>
         <Minus className="w-3 h-3" />
         Sin cambio
       </span>
@@ -217,11 +220,11 @@ function KpiTile({
       }
     >
       <div className="flex items-center justify-between">
-        <span className={`text-sm font-medium ${gradient ? "text-white/90" : "text-slate-400"}`}>{label}</span>
+        <span className={`text-sm font-medium ${gradient ? "text-white/90" : "text-muted-foreground"}`}>{label}</span>
         <Icon className={`w-5 h-5 ${gradient ? "text-white/80" : ""}`} style={!gradient ? { color: STATUS.critical } : undefined} />
       </div>
       <div>
-        <span className={`text-4xl font-bold ${gradient ? "text-white" : "text-white"}`}>{value}</span>
+        <span className={`text-4xl font-bold ${gradient ? "text-white" : "text-foreground"}`}>{value}</span>
         {delta && <div className="mt-2">{delta}</div>}
       </div>
     </div>
@@ -322,13 +325,13 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <div className="dark -m-6 p-6 min-h-[calc(100vh-1px)] bg-background text-foreground space-y-6">
+      <div className="-m-6 p-6 min-h-[calc(100vh-1px)] bg-background text-foreground space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
-            <h1 className="text-2xl font-bold text-white">
+            <h1 className="text-2xl font-bold text-foreground">
               Hola, {user?.nombre}
             </h1>
-            <p className="text-slate-400 mt-1">
+            <p className="text-muted-foreground mt-1">
               {isAdmin
                 ? "Panel de administracion del sistema"
                 : "Estos son tus leads asignados"}
@@ -356,9 +359,9 @@ export default function Dashboard() {
               style={{ backgroundColor: "hsl(var(--card))", border: `1px solid ${STATUS.warning}40` }}
             >
               {cargandoDashboard ? (
-                <p className="text-sm text-slate-400">Calculando...</p>
+                <p className="text-sm text-muted-foreground">Calculando...</p>
               ) : !cuelloDeBotella || !transicionCuelloDeBotella ? (
-                <p className="text-sm text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   Todavia no hay suficientes datos en este período para identificar un cuello de botella.
                 </p>
               ) : (
@@ -373,17 +376,17 @@ export default function Dashboard() {
                     <p className="text-xs font-semibold uppercase tracking-wide" style={{ color: STATUS.warning }}>
                       Cuello de botella
                     </p>
-                    <p className="text-lg font-semibold text-white mt-0.5">
+                    <p className="text-lg font-semibold text-foreground mt-0.5">
                       {transicionCuelloDeBotella.label}{" "}
-                      <span className="text-slate-400 font-normal">({transicionCuelloDeBotella.desc})</span>
+                      <span className="text-muted-foreground font-normal">({transicionCuelloDeBotella.desc})</span>
                     </p>
                   </div>
                   <div className="flex items-center gap-4">
-                    <span className="text-3xl font-semibold text-white">
+                    <span className="text-3xl font-semibold text-foreground">
                       {formatPct(cuelloDeBotella.valorActual)}
                     </span>
                     {cuelloDeBotella.tendencia === "sin_datos_previos" ? (
-                      <span className="text-xs text-slate-400">Sin período anterior para comparar</span>
+                      <span className="text-xs text-muted-foreground">Sin período anterior para comparar</span>
                     ) : (
                       <DeltaTasa actual={cuelloDeBotella.valorActual} anterior={cuelloDeBotella.valorAnterior} />
                     )}
@@ -432,8 +435,8 @@ export default function Dashboard() {
         {/* Embudo visual — distribucion actual del pipeline (no depende del periodo) */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-white">Embudo comercial</CardTitle>
-            <p className="text-sm text-slate-400">
+            <CardTitle className="text-foreground">Embudo comercial</CardTitle>
+            <p className="text-sm text-muted-foreground">
               Distribucion de leads por etapa
             </p>
           </CardHeader>
@@ -445,10 +448,10 @@ export default function Dashboard() {
                 const pct = (count / maxCount) * 100;
                 return (
                   <div key={stage} className="flex items-center gap-4">
-                    <div className="w-32 text-sm font-medium text-slate-300">
+                    <div className="w-32 text-sm font-medium text-muted-foreground">
                       {stageNames[stage] ?? stage}
                     </div>
-                    <div className="flex-1 h-8 bg-white/5 rounded-lg overflow-hidden">
+                    <div className="flex-1 h-8 bg-muted/50 rounded-lg overflow-hidden">
                       <div
                         className="h-full rounded-lg flex items-center px-3 transition-all"
                         style={{ width: `${Math.max(pct, 5)}%`, backgroundColor: CAT.blue }}
@@ -458,7 +461,7 @@ export default function Dashboard() {
                         </span>
                       </div>
                     </div>
-                    <div className="w-12 text-right text-sm text-slate-400">
+                    <div className="w-12 text-right text-sm text-muted-foreground">
                       {count}
                     </div>
                   </div>
@@ -472,8 +475,8 @@ export default function Dashboard() {
         {isAdmin && dashboard && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-white">Conversion entre etapas</CardTitle>
-              <p className="text-sm text-slate-400">
+              <CardTitle className="text-foreground">Conversion entre etapas</CardTitle>
+              <p className="text-sm text-muted-foreground">
                 Que porcentaje de los leads que llegan a una etapa avanzan a la siguiente, en el período seleccionado
               </p>
             </CardHeader>
@@ -493,13 +496,13 @@ export default function Dashboard() {
                           : { border: "1px solid hsl(var(--border))" }
                       }
                     >
-                      <p className="text-xs font-medium text-slate-400">
-                        {t.label} <span className="text-slate-500">({t.key})</span>
+                      <p className="text-xs font-medium text-muted-foreground">
+                        {t.label} <span className="text-muted-foreground">({t.key})</span>
                       </p>
-                      <p className="text-2xl font-semibold text-white mt-1">
+                      <p className="text-2xl font-semibold text-foreground mt-1">
                         {formatPct(valor)}
                       </p>
-                      <p className="text-xs text-slate-500 mt-1">{t.desc}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{t.desc}</p>
                       <div className="mt-2">
                         <DeltaTasa actual={valor} anterior={valorAnterior} />
                       </div>
@@ -515,18 +518,18 @@ export default function Dashboard() {
         {isAdmin && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-white">Evolución histórica</CardTitle>
-              <p className="text-sm text-slate-400">
+              <CardTitle className="text-foreground">Evolución histórica</CardTitle>
+              <p className="text-sm text-muted-foreground">
                 Conversión por etapa a lo largo del tiempo — la línea resaltada es el cuello de botella actual
               </p>
             </CardHeader>
             <CardContent>
               {!esGranularidadHistorico(periodo) ? (
-                <p className="text-sm text-slate-400 py-8 text-center">
+                <p className="text-sm text-muted-foreground py-8 text-center">
                   Elegí un período mensual, trimestral, semestral o anual para ver la evolución histórica.
                 </p>
               ) : !datosHistorico ? (
-                <p className="text-sm text-slate-400 py-8 text-center">Calculando...</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">Calculando...</p>
               ) : (
                 <ChartContainer config={chartConfigHistorico} className="h-72 w-full">
                   <LineChart data={datosHistorico} margin={{ left: 0, right: 12, top: 8, bottom: 0 }}>
@@ -567,25 +570,25 @@ export default function Dashboard() {
         {isAdmin && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-white">Comparación por setter</CardTitle>
-              <p className="text-sm text-slate-400">
+              <CardTitle className="text-foreground">Comparación por setter</CardTitle>
+              <p className="text-sm text-muted-foreground">
                 Conversión de cada setter en el período seleccionado — cada transición se atribuye a
                 quien tenía el lead asignado en ese momento, no al dueño actual
               </p>
             </CardHeader>
             <CardContent>
               {!porSetter ? (
-                <p className="text-sm text-slate-400 py-8 text-center">Calculando...</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">Calculando...</p>
               ) : porSetter.setters.length === 0 ? (
-                <p className="text-sm text-slate-400 py-8 text-center">No hay setters registrados.</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">No hay setters registrados.</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/5">
-                        <th className="text-left p-3 font-medium text-slate-400">Setter</th>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="text-left p-3 font-medium text-muted-foreground">Setter</th>
                         {TRANSICIONES.map((t) => (
-                          <th key={t.key} className="text-right p-3 font-medium text-slate-400">
+                          <th key={t.key} className="text-right p-3 font-medium text-muted-foreground">
                             {t.key}
                           </th>
                         ))}
@@ -595,7 +598,7 @@ export default function Dashboard() {
                       {porSetter.setters.map((s) => (
                         <tr
                           key={s.id}
-                          className={`border-b border-white/5 ${!s.activo ? "text-slate-500" : "text-white"}`}
+                          className={`border-b border-border ${!s.activo ? "text-muted-foreground" : "text-foreground"}`}
                         >
                           <td className="p-3 font-medium">
                             {s.nombre}
@@ -634,22 +637,22 @@ export default function Dashboard() {
         {isAdmin && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-white">Comparación por origen</CardTitle>
-              <p className="text-sm text-slate-400">
+              <CardTitle className="text-foreground">Comparación por origen</CardTitle>
+              <p className="text-sm text-muted-foreground">
                 Qué fuente convierte mejor en el período seleccionado — el origen es fijo desde que se creó el lead
               </p>
             </CardHeader>
             <CardContent>
               {!porOrigen ? (
-                <p className="text-sm text-slate-400 py-8 text-center">Calculando...</p>
+                <p className="text-sm text-muted-foreground py-8 text-center">Calculando...</p>
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead>
-                      <tr className="border-b border-white/10 bg-white/5">
-                        <th className="text-left p-3 font-medium text-slate-400">Origen</th>
+                      <tr className="border-b border-border bg-muted/50">
+                        <th className="text-left p-3 font-medium text-muted-foreground">Origen</th>
                         {TRANSICIONES.map((t) => (
-                          <th key={t.key} className="text-right p-3 font-medium text-slate-400">
+                          <th key={t.key} className="text-right p-3 font-medium text-muted-foreground">
                             {t.key}
                           </th>
                         ))}
@@ -657,7 +660,7 @@ export default function Dashboard() {
                     </thead>
                     <tbody>
                       {porOrigen.origenes.map((o) => (
-                        <tr key={o.origen} className="border-b border-white/5 text-white">
+                        <tr key={o.origen} className="border-b border-border text-foreground">
                           <td className="p-3 font-medium">{ORIGEN_LABELS[o.origen] ?? o.origen}</td>
                           {TRANSICIONES.map((t) => {
                             const valor = o.tasas[t.key];
@@ -691,23 +694,23 @@ export default function Dashboard() {
         {leads && leads.length > 0 && (
           <Card>
             <CardHeader>
-              <CardTitle className="text-white">Leads recientes</CardTitle>
+              <CardTitle className="text-foreground">Leads recientes</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-white/10">
-                      <th className="text-left py-2 px-3 font-medium text-slate-400">
+                    <tr className="border-b border-border">
+                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">
                         Nombre
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-400">
+                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">
                         Instagram
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-400">
+                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">
                         Etapa
                       </th>
-                      <th className="text-left py-2 px-3 font-medium text-slate-400">
+                      <th className="text-left py-2 px-3 font-medium text-muted-foreground">
                         Estado
                       </th>
                     </tr>
@@ -716,16 +719,16 @@ export default function Dashboard() {
                     {leads.slice(0, 10).map((lead) => (
                       <tr
                         key={lead.id}
-                        className="border-b border-white/5 hover:bg-white/5"
+                        className="border-b border-border hover:bg-muted/50"
                       >
-                        <td className="py-2 px-3 font-medium text-white">
+                        <td className="py-2 px-3 font-medium text-foreground">
                           {lead.nombre}
                         </td>
-                        <td className="py-2 px-3 text-slate-400">
+                        <td className="py-2 px-3 text-muted-foreground">
                           @{lead.instagramUsername}
                         </td>
                         <td className="py-2 px-3">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-white/10 text-slate-200">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">
                             {lead.etapaActual ?? "Sin etapa"}
                           </span>
                         </td>

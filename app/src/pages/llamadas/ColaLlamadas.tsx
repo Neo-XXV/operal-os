@@ -62,14 +62,14 @@ export function ColaLlamadas() {
   });
 
   if (isLoading) {
-    return <p className="text-sm text-slate-400">Cargando...</p>;
+    return <p className="text-sm text-muted-foreground">Cargando...</p>;
   }
 
   if (!cola || cola.length === 0) {
     return (
       <Card>
         <CardContent className="py-10 text-center">
-          <p className="text-sm text-slate-400">No hay leads pendientes de llamar.</p>
+          <p className="text-sm text-muted-foreground">No hay leads pendientes de llamar.</p>
         </CardContent>
       </Card>
     );
@@ -82,25 +82,25 @@ export function ColaLlamadas() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-white/10 bg-white/5">
-                  <th className="text-left p-3 font-medium text-slate-400">Lead</th>
-                  <th className="text-left p-3 font-medium text-slate-400">Setter / Origen</th>
-                  <th className="text-left p-3 font-medium text-slate-400">Por qué está pendiente</th>
-                  <th className="text-right p-3 font-medium text-slate-400"></th>
+                <tr className="border-b border-border bg-muted/50">
+                  <th className="text-left p-3 font-medium text-muted-foreground">Lead</th>
+                  <th className="text-left p-3 font-medium text-muted-foreground">Setter / Origen</th>
+                  <th className="text-left p-3 font-medium text-muted-foreground">Por qué está pendiente</th>
+                  <th className="text-right p-3 font-medium text-muted-foreground"></th>
                 </tr>
               </thead>
               <tbody>
                 {(cola as LeadCola[]).map((lead) => (
-                  <tr key={lead.leadId} className="border-b border-white/5 hover:bg-white/5">
+                  <tr key={lead.leadId} className="border-b border-border hover:bg-muted/50">
                     <td className="p-3">
-                      <p className="font-medium text-white">{lead.nombre || "(sin nombre)"}</p>
-                      <p className="text-slate-400 text-xs">@{lead.instagramUsername}</p>
+                      <p className="font-medium text-foreground">{lead.nombre || "(sin nombre)"}</p>
+                      <p className="text-muted-foreground text-xs">@{lead.instagramUsername}</p>
                     </td>
-                    <td className="p-3 text-slate-300">
+                    <td className="p-3 text-muted-foreground">
                       {lead.setterNombre ?? "Sin asignar"}
-                      {lead.origen && <span className="text-slate-500 text-xs ml-1">({lead.origen})</span>}
+                      {lead.origen && <span className="text-muted-foreground text-xs ml-1">({lead.origen})</span>}
                     </td>
-                    <td className="p-3 text-slate-300">{motivoPendiente(lead)}</td>
+                    <td className="p-3 text-muted-foreground">{motivoPendiente(lead)}</td>
                     <td className="p-3 text-right">
                       <Button size="sm" onClick={() => setLeadSeleccionado(lead)}>
                         <Phone className="w-3.5 h-3.5 mr-1.5" />
@@ -176,19 +176,19 @@ function FormularioLlamada({
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
-      <DialogContent className="dark max-w-lg">
+      <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle className="text-white">
+          <DialogTitle>
             Registrar llamada — {lead.nombre || `@${lead.instagramUsername}`}
           </DialogTitle>
-          <p className="text-sm text-slate-400">
+          <p className="text-sm text-muted-foreground">
             Esta será la llamada N°{numero} de hasta 3.
           </p>
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-1">
-            <Label className="text-slate-300">Fecha de la llamada</Label>
+            <Label className="text-muted-foreground">Fecha de la llamada</Label>
             <Input type="date" value={fechaCall} onChange={(e) => setFechaCall(e.target.value)} required />
           </div>
 
@@ -204,7 +204,7 @@ function FormularioLlamada({
                 }
               }}
             />
-            <Label htmlFor="se_presento" className="text-slate-300 font-normal">
+            <Label htmlFor="se_presento" className="text-muted-foreground font-normal">
               Se presentó a la llamada
             </Label>
           </div>
@@ -219,7 +219,7 @@ function FormularioLlamada({
                   if (!v) setCerro(false);
                 }}
               />
-              <Label htmlFor="califico" className="text-slate-300 font-normal">
+              <Label htmlFor="califico" className="text-muted-foreground font-normal">
                 Calificó (era apto para la oferta)
               </Label>
             </div>
@@ -228,7 +228,7 @@ function FormularioLlamada({
           {sePresento && califico && (
             <div className="flex items-center gap-2 pl-12">
               <Checkbox id="cerro" checked={cerro} onCheckedChange={(v) => setCerro(v === true)} />
-              <Label htmlFor="cerro" className="text-slate-300 font-normal">
+              <Label htmlFor="cerro" className="text-muted-foreground font-normal">
                 Cerró
               </Label>
             </div>
@@ -236,7 +236,7 @@ function FormularioLlamada({
 
           {sePresento && califico && cerro && (
             <div className="pl-12 space-y-1">
-              <Label className="text-slate-300">Monto del cierre (USD)</Label>
+              <Label className="text-muted-foreground">Monto del cierre (USD)</Label>
               <Input
                 type="number"
                 min="0"
@@ -246,24 +246,24 @@ function FormularioLlamada({
                 onChange={(e) => setMontoCierre(e.target.value)}
                 required
               />
-              <p className="text-xs text-slate-500">Moneda: USD (único valor válido en esta versión)</p>
+              <p className="text-xs text-muted-foreground">Moneda: USD (único valor válido en esta versión)</p>
             </div>
           )}
 
           <div className="space-y-1">
-            <Label className="text-slate-300">Situación del lead</Label>
+            <Label className="text-muted-foreground">Situación del lead</Label>
             <Textarea value={situacion} onChange={(e) => setSituacion(e.target.value)} rows={2} />
           </div>
           <div className="space-y-1">
-            <Label className="text-slate-300">Notas</Label>
+            <Label className="text-muted-foreground">Notas</Label>
             <Textarea value={notas} onChange={(e) => setNotas(e.target.value)} rows={2} />
           </div>
           <div className="space-y-1">
-            <Label className="text-slate-300">Autoevaluación (¿cómo te sentiste? ¿qué mejorarías?)</Label>
+            <Label className="text-muted-foreground">Autoevaluación (¿cómo te sentiste? ¿qué mejorarías?)</Label>
             <Textarea value={autoevaluacion} onChange={(e) => setAutoevaluacion(e.target.value)} rows={2} />
           </div>
           <div className="space-y-1">
-            <Label className="text-slate-300">Grabación (link, opcional)</Label>
+            <Label className="text-muted-foreground">Grabación (link, opcional)</Label>
             <Input
               type="url"
               placeholder="https://..."

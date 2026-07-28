@@ -27,9 +27,9 @@ function InfoTip({ texto }: { texto: string }) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
-        <Info className="w-3.5 h-3.5 text-slate-500 hover:text-slate-300 cursor-help inline ml-1" />
+        <Info className="w-3.5 h-3.5 text-muted-foreground hover:text-foreground cursor-help inline ml-1" />
       </TooltipTrigger>
-      <TooltipContent className="dark max-w-xs text-sm">{texto}</TooltipContent>
+      <TooltipContent className="max-w-xs text-sm">{texto}</TooltipContent>
     </Tooltip>
   );
 }
@@ -65,11 +65,11 @@ function TileSecundaria({ label, value, info }: { label: string; value: string; 
       className="rounded-2xl p-4 flex flex-col justify-between min-h-[90px]"
       style={{ backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }}
     >
-      <span className="text-xs font-medium text-slate-400 flex items-center">
+      <span className="text-xs font-medium text-muted-foreground flex items-center">
         {label}
         {info && <InfoTip texto={info} />}
       </span>
-      <span className="text-xl font-semibold text-white">{value}</span>
+      <span className="text-xl font-semibold text-foreground">{value}</span>
     </div>
   );
 }
@@ -101,7 +101,7 @@ export function DashboardLlamadas() {
       />
 
       {isLoading || !data ? (
-        <p className="text-sm text-slate-400">Calculando...</p>
+        <p className="text-sm text-muted-foreground">Calculando...</p>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -149,7 +149,7 @@ export function DashboardLlamadas() {
           </div>
 
           {(data.llamadasTotales === 0 && data.cashCollected === 0) && (
-            <p className="text-sm text-slate-500 flex items-center gap-2">
+            <p className="text-sm text-muted-foreground flex items-center gap-2">
               <PhoneCall className="w-4 h-4" />
               Sin actividad de llamadas ni pagos en este período.
             </p>
