@@ -312,11 +312,11 @@ Taxonomía cerrada (definida con el dueño del negocio):
 
 ### 11. `CALENDAR_EVENTO_CREADO`
 
-**Descripción:** Se crea un evento en Google Calendar para agendar la llamada con el lead, disparado desde OPERAL OS (Sprint 5). Es el registro de una acción operativa externa — no mueve el embudo por sí solo (`02_reglas_de_negocio.md` sección 8).
+**Descripción:** Se agenda la llamada con el lead desde OPERAL OS (Sprint 5). **El evento local es el canónico** — se guarda siempre, exista o no conexión con Google Calendar. Si hay conexión y la API confirma, además queda linkeado a un evento real de Google; si no hay conexión, o la API falla, el evento local se guarda igual, sin ese link (ver `google_event_id` abajo y `02_reglas_de_negocio.md` sección 8, "Google Calendar como espejo opcional").
 
 **Quién lo genera:** Setter o Admin.
 
-**Cuándo ocurre:** Cuando se crea el invite desde OPERAL OS y la API de Google Calendar confirma la creación.
+**Cuándo ocurre:** Cuando se agenda la llamada desde OPERAL OS. No depende de que la API de Google Calendar responda.
 
 **Payload:**
 ```json
@@ -330,27 +330,29 @@ Taxonomía cerrada (definida con el dueño del negocio):
 }
 ```
 
-- `google_event_id`: id del evento devuelto por la API de Google Calendar — la referencia que permite editarlo después.
-- `fecha_hora_inicio`/`fecha_hora_fin`: con hora y zona horaria (a diferencia de `fecha_call`/`fecha_pago`, que son fecha sin hora) — un evento de Calendar necesita el horario exacto para el invite.
-- `invitados`: opcional, lista de emails a los que se les envía la notificación de Google.
+- `google_event_id`: **opcional** (`string | null`). Id del evento devuelto por la API de Google Calendar si la sincronización funcionó en el momento de crear el evento. `null` si no había conexión, o si la conexión existía pero la llamada a Google falló — en ningún caso bloquea que el evento local se guarde. Un evento con `google_event_id: null` puede sincronizarse después (ver `CALENDAR_EVENTO_SINCRONIZADO`, evento 13) o al editarlo con conexión activa (ver evento 12).
+- `calendar_id`: **opcional**, solo presente si `google_event_id` también lo está.
+- `fecha_hora_inicio`/`fecha_hora_fin`: con hora y zona horaria (a diferencia de `fecha_call`/`fecha_pago`, que son fecha sin hora) — un evento de calendario necesita el horario exacto. Esta es la fecha que alimenta cualquier cálculo que dependa de "cuándo es/fue la llamada" (p. ej. tiempos entre C y D) — se lee directo de acá, nunca de Google.
+- `invitados`: opcional, lista de emails a los que se les envía la notificación de Google (solo aplica si hay `google_event_id`).
 
 **Reglas:**
 - ❌ **Solo puede crearse si la etapa actual del lead es `C` o `D`.** Un lead en `A`, `MS` o `B` rechaza el intento.
 - **No puede crearse sobre un lead con `LEAD_DESCARTADO`** — mismo bloqueo que el resto de los eventos comerciales.
-- **Un lead tiene a lo sumo un evento de Calendar vigente.** Si ya existe uno (el más reciente `CALENDAR_EVENTO_CREADO`/`CALENDAR_EVENTO_ACTUALIZADO` de ese lead no fue reemplazado), crear uno nuevo se rechaza — la corrección de un evento vigente es `CALENDAR_EVENTO_ACTUALIZADO`, no un `CREADO` nuevo.
+- **Un lead tiene a lo sumo un evento de Calendar vigente.** Si ya existe uno (el más reciente `CALENDAR_EVENTO_CREADO`/`CALENDAR_EVENTO_ACTUALIZADO`/`CALENDAR_EVENTO_SINCRONIZADO` de ese lead no fue reemplazado), crear uno nuevo se rechaza — la corrección de un evento vigente es `CALENDAR_EVENTO_ACTUALIZADO`, no un `CREADO` nuevo.
 - No genera ni modifica `ESTADO_CAMBIADO` — marcar C o D sigue siendo una acción manual separada.
+- Un fallo al sincronizar con Google (conectado pero la API rechaza) **nunca revierte ni bloquea** la creación del evento local — se guarda con `google_event_id: null` y la UI avisa del fallo de sincronización por separado.
 
-**Dispara:** vista de calendario, botón "Editar" en el detalle del lead (vía el `google_event_id` vigente).
+**Dispara:** vista de calendario interna (agenda propia de OPERAL, siempre disponible), vista de calendario de Google (solo si está sincronizado), botón "Editar"/"Sincronizar" en el detalle del lead.
 
 ---
 
 ### 12. `CALENDAR_EVENTO_ACTUALIZADO`
 
-**Descripción:** Se edita (reagenda) el evento de Calendar vigente que OPERAL había creado para ese lead.
+**Descripción:** Se edita (reagenda) el evento de Calendar vigente de ese lead — cambia el horario. Igual que el evento 11, es una escritura local incondicional; si hay conexión y el vigente ya tenía `google_event_id`, además actualiza el evento real en Google. Si el vigente todavía no tenía `google_event_id` y hay conexión activa, este evento lo crea en Google en ese momento (no lo actualiza, porque todavía no existe del lado de Google) y el `google_event_id` resultante queda registrado acá.
 
 **Quién lo genera:** Setter o Admin.
 
-**Cuándo ocurre:** Al editar el evento desde OPERAL OS y la API de Google Calendar confirma la actualización.
+**Cuándo ocurre:** Al editar el horario del evento desde OPERAL OS.
 
 **Payload:**
 ```json
@@ -361,14 +363,45 @@ Taxonomía cerrada (definida con el dueño del negocio):
 }
 ```
 
-- `google_event_id`: debe coincidir con el del evento vigente del lead — no se edita un evento que OPERAL no creó, ni uno que ya fue reemplazado.
+- `google_event_id`: **opcional** (`string | null`), mismo criterio que en el evento 11 — puede quedar en `null` si no hay conexión o si Google falla al momento de editar.
 
 **Reglas:**
 - ❌ Solo puede editarse el evento de Calendar **vigente** de un lead cuya etapa actual sea `C` o `D`.
 - **No puede editarse sobre un lead con `LEAD_DESCARTADO`.**
 - No genera ni modifica `ESTADO_CAMBIADO`.
+- Mismo principio que el evento 11: un fallo de Google nunca bloquea el cambio de horario local.
 
-**Dispara:** vista de calendario (fecha/hora actualizada).
+**Dispara:** vista de calendario interna, vista de calendario de Google (si sincronizado).
+
+---
+
+### 13. `CALENDAR_EVENTO_SINCRONIZADO`
+
+**Descripción:** El evento de Calendar vigente de un lead —creado o editado en algún momento sin conexión a Google, o cuya sincronización falló— se linkea (o re-linkea) a un evento real de Google, **sin cambiar el horario**. Es un hecho distinto de `CALENDAR_EVENTO_ACTUALIZADO`: ahí cambia el horario, acá solo cambia el vínculo con Google — separarlos mantiene la trazabilidad de "¿esto fue una reagenda real o solo una sincronización tardía?" legible directo del tipo de evento, sin tener que inspeccionar el payload para adivinarlo.
+
+**Quién lo genera:** Setter o Admin.
+
+**Cuándo ocurre:** Cuando alguien dispara "Sincronizar con Google" sobre un evento vigente sin `google_event_id`, y la API confirma la creación del evento en Google.
+
+**Payload:**
+```json
+{
+  "google_event_id": "abc123xyz",
+  "fecha_hora_inicio": "2026-08-05T16:00:00-03:00",
+  "fecha_hora_fin": "2026-08-05T16:30:00-03:00"
+}
+```
+
+- `google_event_id`: **obligatorio** acá (a diferencia de los eventos 11 y 12) — este evento solo existe si la sincronización funcionó; si falla, no se genera nada (a diferencia de crear/editar, acá no hay "versión local sin Google" porque la única razón de este evento es justamente registrar que el link con Google ya existe).
+- `fecha_hora_inicio`/`fecha_hora_fin`: copiadas sin cambios del evento vigente anterior — este evento nunca reagenda, solo sincroniza.
+
+**Reglas:**
+- ❌ Solo puede dispararse si existe un evento de Calendar vigente para el lead y ese vigente tiene `google_event_id: null`. Si ya está sincronizado, no hay nada que hacer.
+- ❌ Requiere conexión con Google activa — sin conexión, no hay nada que sincronizar (a diferencia de crear/editar, este evento no tiene sentido "sin Google" por definición).
+- **No puede dispararse sobre un lead con `LEAD_DESCARTADO`.**
+- No genera ni modifica `ESTADO_CAMBIADO`.
+
+**Dispara:** vista de calendario de Google (el evento pasa a aparecer ahí por primera vez), badge de "sincronizado" en la vista de calendario interna y en el detalle del lead.
 
 ---
 
@@ -386,8 +419,9 @@ Taxonomía cerrada (definida con el dueño del negocio):
 | 8 | `NOTA_AGREGADA` | Setter | Sí (texto) |
 | 9 | `LLAMADA_REGISTRADA` | Admin | Sí (número, resultado, montos) |
 | 10 | `PAGO_REGISTRADO` | Admin | Sí (monto, nota) |
-| 11 | `CALENDAR_EVENTO_CREADO` | Setter / Admin | Sí (google_event_id, horario) |
-| 12 | `CALENDAR_EVENTO_ACTUALIZADO` | Setter / Admin | Sí (google_event_id, horario) |
+| 11 | `CALENDAR_EVENTO_CREADO` | Setter / Admin | Sí (google_event_id opcional, horario) |
+| 12 | `CALENDAR_EVENTO_ACTUALIZADO` | Setter / Admin | Sí (google_event_id opcional, horario) |
+| 13 | `CALENDAR_EVENTO_SINCRONIZADO` | Setter / Admin | Sí (google_event_id obligatorio, horario sin cambios) |
 
 ## Pendiente fuera de este documento
 
