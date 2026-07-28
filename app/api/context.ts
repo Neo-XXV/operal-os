@@ -40,7 +40,7 @@ function extractToken(req: Request): string | undefined {
   return undefined;
 }
 
-async function resolveUser(token: string): Promise<UserContext | undefined> {
+export async function resolveUser(token: string): Promise<UserContext | undefined> {
   try {
     const decoded = jwt.verify(token, env.jwtSecret) as {
       userId: number;

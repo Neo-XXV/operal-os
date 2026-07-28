@@ -6,6 +6,7 @@ import Leads from './pages/Leads'
 import LeadDetail from './pages/LeadDetail'
 import EventLog from './pages/EventLog'
 import Llamadas from './pages/Llamadas'
+import Calendario from './pages/Calendario'
 
 export default function App() {
   return (
@@ -17,6 +18,7 @@ export default function App() {
       <Route path="/leads/:id" element={<LeadDetail />} />
       <Route path="/event-log" element={<EventLog />} />
       <Route path="/llamadas" element={<Llamadas />} />
+      <Route path="/calendario" element={<Calendario />} />
     </Routes>
   )
 }

@@ -9,6 +9,7 @@ import {
   Menu,
   X,
   Phone,
+  CalendarDays,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -39,6 +40,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     // esta fase (ver 02_reglas_de_negocio.md seccion 7). El guard real esta
     // en la pagina (Llamadas.tsx) y en el backend; esto solo oculta el link.
     ...(isAdmin ? [{ href: "/llamadas", label: "Llamadas", icon: Phone }] : []),
+    // Sprint 5: integracion con Google Calendar -- a diferencia de
+    // /llamadas, esto SI participa el setter (agenda en C/D junto al
+    // admin), asi que no va gateado por isAdmin.
+    { href: "/calendario", label: "Calendario", icon: CalendarDays },
     // Event Log es una vista de auditoria global — no aporta al centro
     // operativo del setter (su tabla + el detalle de cada lead). Sigue
     // existiendo para ADMIN/MANAGER, solo se saca del nav del setter.

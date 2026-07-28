@@ -3,6 +3,7 @@ import { authRouter } from "./routers/auth";
 import { userRouter } from "./routers/user";
 import { leadRouter } from "./routers/lead";
 import { eventRouter } from "./routers/event";
+import { calendarRouter } from "./routers/calendar";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -10,6 +11,7 @@ export const appRouter = createRouter({
   user: userRouter,
   lead: leadRouter,
   event: eventRouter,
+  calendar: calendarRouter,
 });
 
 export type AppRouter = typeof appRouter;
