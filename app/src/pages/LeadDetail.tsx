@@ -88,10 +88,10 @@ const ESTADO_LLAMADA_LABELS: Record<string, string> = {
 };
 
 const ESTADO_LLAMADA_COLORS: Record<string, string> = {
-  PENDIENTE_LLAMAR: "bg-amber-50 text-amber-700",
-  PENDIENTE_REAGENDA: "bg-orange-50 text-orange-700",
-  CERRADO: "bg-green-50 text-green-700",
-  PERDIDO: "bg-red-50 text-red-700",
+  PENDIENTE_LLAMAR: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  PENDIENTE_REAGENDA: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+  CERRADO: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
+  PERDIDO: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
 };
 
 const EVENT_TYPES = [
@@ -358,22 +358,22 @@ export default function LeadDetail() {
   };
 
   const etapaColors: Record<string, string> = {
-    A: "bg-slate-100 text-slate-700",
-    MS: "bg-blue-50 text-blue-700",
-    B: "bg-amber-50 text-amber-700",
-    C: "bg-purple-50 text-purple-700",
-    D: "bg-green-50 text-green-700",
+    A: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    MS: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    B: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    C: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
+    D: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
   };
 
   const eventColors: Record<string, string> = {
-    LEAD_CREADO: "bg-slate-100 text-slate-700",
-    LEAD_ASIGNADO: "bg-indigo-50 text-indigo-700",
-    ESTADO_CAMBIADO: "bg-blue-50 text-blue-700",
-    SEGUIMIENTO_ENVIADO: "bg-amber-50 text-amber-700",
-    RESPUESTA_RECIBIDA: "bg-green-50 text-green-700",
-    OBJECION_REGISTRADA: "bg-orange-50 text-orange-700",
-    LEAD_DESCARTADO: "bg-red-50 text-red-700",
-    NOTA_AGREGADA: "bg-gray-50 text-gray-700",
+    LEAD_CREADO: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+    LEAD_ASIGNADO: "bg-indigo-50 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
+    ESTADO_CAMBIADO: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+    SEGUIMIENTO_ENVIADO: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+    RESPUESTA_RECIBIDA: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
+    OBJECION_REGISTRADA: "bg-orange-50 text-orange-700 dark:bg-orange-950 dark:text-orange-300",
+    LEAD_DESCARTADO: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
+    NOTA_AGREGADA: "bg-gray-50 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
   };
 
   const calendarPendiente = crearCalendar.isPending || editarCalendar.isPending;
@@ -428,14 +428,14 @@ export default function LeadDetail() {
               value={emailCalendar}
               onChange={(e) => setEmailCalendar(e.target.value)}
             />
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-muted-foreground">
               Se guarda en el lead y se usa para invitarlo al evento. Si se deja vacio, el evento
               se crea sin invitados.
             </p>
           </div>
         )}
         {errorCalendar && (
-          <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">{errorCalendar}</p>
+          <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{errorCalendar}</p>
         )}
         <Button type="submit" className="w-full" disabled={calendarPendiente}>
           {calendarPendiente ? "Guardando..." : calendarVigente ? "Guardar cambios" : "Agendar"}
@@ -447,7 +447,7 @@ export default function LeadDetail() {
   if (!lead) {
     return (
       <Layout>
-        <div className="text-center py-12 text-slate-500">
+        <div className="text-center py-12 text-muted-foreground">
           Lead no encontrado o no tienes acceso
         </div>
       </Layout>
@@ -465,22 +465,22 @@ export default function LeadDetail() {
         {/* Lead header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-slate-900 flex items-center justify-center text-xl font-bold text-white">
+            <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center text-xl font-bold text-primary-foreground">
               {lead.nombre.charAt(0).toUpperCase()}
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-slate-900">{lead.nombre}</h1>
-              <p className="text-slate-500">@{lead.instagramUsername}</p>
+              <h1 className="text-2xl font-bold text-foreground">{lead.nombre}</h1>
+              <p className="text-muted-foreground">@{lead.instagramUsername}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
-              etapaColors[lead.etapaActual ?? "A"] ?? "bg-slate-100 text-slate-700"
+              etapaColors[lead.etapaActual ?? "A"] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
             }`}>
               Etapa: {lead.etapaActual ?? "Sin etapa"}
             </span>
             {lead.descartado && (
-              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-red-50 text-red-700">
+              <span className="inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300">
                 {lead.motivoDescarte}
               </span>
             )}
@@ -491,7 +491,7 @@ export default function LeadDetail() {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs text-slate-500 uppercase font-medium">Setter asignado</p>
+              <p className="text-xs text-muted-foreground uppercase font-medium">Setter asignado</p>
               <p className="text-lg font-semibold mt-1">
                 {lead.setterActual ? `ID: ${lead.setterActual}` : "Sin asignar"}
               </p>
@@ -499,15 +499,15 @@ export default function LeadDetail() {
           </Card>
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs text-slate-500 uppercase font-medium">Estado</p>
-              <p className={`text-lg font-semibold mt-1 ${lead.descartado ? "text-red-600" : "text-green-600"}`}>
+              <p className="text-xs text-muted-foreground uppercase font-medium">Estado</p>
+              <p className={`text-lg font-semibold mt-1 ${lead.descartado ? "text-destructive" : "text-green-600 dark:text-green-400"}`}>
                 {lead.descartado ? "Descartado" : "Activo"}
               </p>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="p-4">
-              <p className="text-xs text-slate-500 uppercase font-medium">Eventos</p>
+              <p className="text-xs text-muted-foreground uppercase font-medium">Eventos</p>
               <p className="text-lg font-semibold mt-1">{timeline?.length ?? 0}</p>
             </CardContent>
           </Card>
@@ -524,22 +524,22 @@ export default function LeadDetail() {
             se sincroniza. */}
         {!lead.descartado && (
           <div className="space-y-3">
-            <h2 className="text-lg font-bold text-slate-900">Agendar en Calendar</h2>
+            <h2 className="text-lg font-bold text-foreground">Agendar en Calendar</h2>
             <Card>
               <CardContent className="p-4 space-y-2">
                 <div className="flex items-center justify-between flex-wrap gap-3">
                 {lead.etapaActual !== "C" && lead.etapaActual !== "D" ? (
-                  <p className="text-sm text-slate-500">
+                  <p className="text-sm text-muted-foreground">
                     Disponible cuando el lead llegue a la etapa C (setter agenda en el calendario).
                   </p>
                 ) : calendarVigente ? (
                   <>
-                    <div className="flex items-center gap-2 text-sm text-slate-700">
-                      <CalendarDays className="w-4 h-4 text-slate-400" />
+                    <div className="flex items-center gap-2 text-sm text-foreground">
+                      <CalendarDays className="w-4 h-4 text-muted-foreground" />
                       {formatFechaHoraCorta(calendarVigente.fecha_hora_inicio)} —{" "}
                       {formatFechaHoraCorta(calendarVigente.fecha_hora_fin)}
                       {!calendarVigente.google_event_id && (
-                        <span className="text-xs px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">
+                        <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                           Sin sincronizar
                         </span>
                       )}
@@ -567,7 +567,7 @@ export default function LeadDetail() {
                   </>
                 ) : (
                   <>
-                    <p className="text-sm text-slate-500">Sin evento agendado todavia.</p>
+                    <p className="text-sm text-muted-foreground">Sin evento agendado todavia.</p>
                     <Dialog open={calendarOpen} onOpenChange={setCalendarOpen}>
                       <DialogTrigger asChild>
                         <Button size="sm" onClick={abrirDialogCalendar}>
@@ -581,9 +581,9 @@ export default function LeadDetail() {
                 )}
                 </div>
                 {!calendarEstado?.conectado && (lead.etapaActual === "C" || lead.etapaActual === "D") && (
-                  <p className="text-xs text-slate-400">
+                  <p className="text-xs text-muted-foreground">
                     Google Calendar no esta conectado — el evento se guarda igual en OPERAL OS.{" "}
-                    <a href="/calendario" className="text-blue-600 hover:underline">
+                    <a href="/calendario" className="text-blue-600 dark:text-blue-400 hover:underline">
                       Conectalo
                     </a>{" "}
                     para que ademas se sincronice.
@@ -600,9 +600,9 @@ export default function LeadDetail() {
         {isAdmin && estadoLlamadaData?.estado && (
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h2 className="text-lg font-bold text-slate-900">Fase de llamada</h2>
+              <h2 className="text-lg font-bold text-foreground">Fase de llamada</h2>
               <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-medium ${
-                ESTADO_LLAMADA_COLORS[estadoLlamadaData.estado] ?? "bg-slate-100 text-slate-700"
+                ESTADO_LLAMADA_COLORS[estadoLlamadaData.estado] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
               }`}>
                 {ESTADO_LLAMADA_LABELS[estadoLlamadaData.estado] ?? estadoLlamadaData.estado}
               </span>
@@ -612,7 +612,7 @@ export default function LeadDetail() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <Card>
                   <CardContent className="p-4">
-                    <p className="text-xs text-slate-500 uppercase font-medium">Monto del cierre</p>
+                    <p className="text-xs text-muted-foreground uppercase font-medium">Monto del cierre</p>
                     <p className="text-lg font-semibold mt-1">
                       {cierre.montoCierre != null ? formatUSD(cierre.montoCierre) : "—"}
                     </p>
@@ -621,7 +621,7 @@ export default function LeadDetail() {
                 <Card>
                   <CardContent className="p-4 flex items-center justify-between gap-4">
                     <div>
-                      <p className="text-xs text-slate-500 uppercase font-medium">Cash collected</p>
+                      <p className="text-xs text-muted-foreground uppercase font-medium">Cash collected</p>
                       <p className="text-lg font-semibold mt-1">
                         {formatUSD(cashCollectedData?.montoTotal ?? 0)}
                       </p>
@@ -646,7 +646,7 @@ export default function LeadDetail() {
                               onChange={(e) => setMontoPago(e.target.value)}
                               required
                             />
-                            <p className="text-xs text-slate-500">Moneda: USD (único valor válido en esta versión)</p>
+                            <p className="text-xs text-muted-foreground">Moneda: USD (único valor válido en esta versión)</p>
                           </div>
                           <div className="space-y-2">
                             <Label>Fecha del pago</Label>
@@ -662,7 +662,7 @@ export default function LeadDetail() {
                             <Textarea value={notaPago} onChange={(e) => setNotaPago(e.target.value)} rows={2} />
                           </div>
                           {errorPago && (
-                            <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                            <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">
                               {errorPago}
                             </p>
                           )}
@@ -683,32 +683,32 @@ export default function LeadDetail() {
                   <Card key={ev.id}>
                     <CardContent className="p-4">
                       <div className="flex items-center justify-between mb-2">
-                        <span className="font-medium text-slate-900">Llamada N°{ev.payload.numero}</span>
-                        <span className="text-xs text-slate-400">{ev.payload.fecha_call}</span>
+                        <span className="font-medium text-foreground">Llamada N°{ev.payload.numero}</span>
+                        <span className="text-xs text-muted-foreground">{ev.payload.fecha_call}</span>
                       </div>
                       <div className="flex flex-wrap gap-2 text-xs mb-2">
                         <span className={`px-2 py-0.5 rounded-full font-medium ${
-                          ev.payload.se_presento ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"
+                          ev.payload.se_presento ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" : "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300"
                         }`}>
                           {ev.payload.se_presento ? "Se presentó" : "No se presentó"}
                         </span>
                         {ev.payload.se_presento && (
                           <span className={`px-2 py-0.5 rounded-full font-medium ${
-                            ev.payload.califico ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-700"
+                            ev.payload.califico ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                           }`}>
                             {ev.payload.califico ? "Calificó" : "No calificó"}
                           </span>
                         )}
                         {ev.payload.califico && (
                           <span className={`px-2 py-0.5 rounded-full font-medium ${
-                            ev.payload.cerro ? "bg-green-50 text-green-700" : "bg-slate-100 text-slate-700"
+                            ev.payload.cerro ? "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" : "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                           }`}>
                             {ev.payload.cerro ? "Cerró" : "No cerró"}
                           </span>
                         )}
                       </div>
                       {(ev.payload.situacion || ev.payload.notas || ev.payload.autoevaluacion) && (
-                        <div className="text-sm text-slate-600 space-y-1">
+                        <div className="text-sm text-muted-foreground space-y-1">
                           {ev.payload.situacion && (
                             <p><span className="font-medium">Situación:</span> {ev.payload.situacion}</p>
                           )}
@@ -725,7 +725,7 @@ export default function LeadDetail() {
                           href={ev.payload.grabacion_url}
                           target="_blank"
                           rel="noreferrer"
-                          className="text-xs text-blue-600 hover:underline mt-1 inline-block"
+                          className="text-xs text-blue-600 dark:text-blue-400 hover:underline mt-1 inline-block"
                         >
                           Ver grabación
                         </a>
@@ -738,13 +738,13 @@ export default function LeadDetail() {
 
             {pagos.length > 0 && (
               <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-slate-700">Pagos registrados</h3>
+                <h3 className="text-sm font-semibold text-foreground">Pagos registrados</h3>
                 {pagos.map((ev) => (
-                  <div key={ev.id} className="flex items-center justify-between text-sm bg-slate-50 rounded-lg px-3 py-2">
-                    <span className="font-medium text-slate-900">
+                  <div key={ev.id} className="flex items-center justify-between text-sm bg-muted/50 rounded-lg px-3 py-2">
+                    <span className="font-medium text-foreground">
                       {formatUSD(ev.payload.monto)} — {ev.payload.fecha_pago}
                     </span>
-                    {ev.payload.nota && <span className="text-slate-500 text-xs">{ev.payload.nota}</span>}
+                    {ev.payload.nota && <span className="text-muted-foreground text-xs">{ev.payload.nota}</span>}
                   </div>
                 ))}
               </div>
@@ -754,7 +754,7 @@ export default function LeadDetail() {
 
         {/* Timeline */}
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-slate-900">Historial de eventos</h2>
+          <h2 className="text-lg font-bold text-foreground">Historial de eventos</h2>
           {!lead.descartado && (
             <Dialog open={open} onOpenChange={setOpen}>
               <DialogTrigger asChild>
@@ -903,7 +903,7 @@ export default function LeadDetail() {
                   )}
 
                   {error && (
-                    <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                    <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">
                       {error}
                     </p>
                   )}
@@ -918,7 +918,7 @@ export default function LeadDetail() {
 
         {!timeline || timeline.length === 0 ? (
           <Card>
-            <CardContent className="py-8 text-center text-slate-500">
+            <CardContent className="py-8 text-center text-muted-foreground">
               No hay eventos registrados para este lead
             </CardContent>
           </Card>
@@ -931,19 +931,19 @@ export default function LeadDetail() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          eventColors[ev.tipo] ?? "bg-slate-100 text-slate-700"
+                          eventColors[ev.tipo] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                         }`}>
                           {ev.tipo}
                         </span>
-                        <span className="text-xs text-slate-400">
+                        <span className="text-xs text-muted-foreground">
                           {ev.actor?.nombre ?? ev.actorTipo}
                         </span>
                       </div>
-                      <pre className="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg overflow-x-auto">
+                      <pre className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-lg overflow-x-auto">
                         {JSON.stringify(ev.payload, null, 2)}
                       </pre>
                     </div>
-                    <span className="text-xs text-slate-400 ml-4 whitespace-nowrap">
+                    <span className="text-xs text-muted-foreground ml-4 whitespace-nowrap">
                       {ev.timestamp ? new Date(ev.timestamp).toLocaleString("es-AR") : ""}
                     </span>
                   </div>
