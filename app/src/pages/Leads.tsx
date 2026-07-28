@@ -58,11 +58,11 @@ const SIGUIENTE_ETAPA: Record<string, string | undefined> = {
 };
 
 const etapaColors: Record<string, string> = {
-  A: "bg-slate-100 text-slate-700",
-  MS: "bg-blue-50 text-blue-700",
-  B: "bg-amber-50 text-amber-700",
-  C: "bg-purple-50 text-purple-700",
-  D: "bg-green-50 text-green-700",
+  A: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  MS: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  B: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+  C: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300",
+  D: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
 };
 
 export default function Leads() {
@@ -88,7 +88,7 @@ function EditableCell({
 
   return (
     <input
-      className="w-full bg-transparent border border-transparent hover:border-slate-200 focus:border-slate-400 rounded px-2 py-1 text-sm outline-none"
+      className="w-full bg-transparent border border-transparent hover:border-border focus:border-ring rounded px-2 py-1 text-sm outline-none"
       value={local}
       placeholder={placeholder}
       onChange={(e) => setLocal(e.target.value)}
@@ -223,8 +223,8 @@ function TablaSetter() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
-        <p className="text-slate-500 mt-1">Tus leads asignados</p>
+        <h1 className="text-2xl font-bold text-foreground">Leads</h1>
+        <p className="text-muted-foreground mt-1">Tus leads asignados</p>
       </div>
 
       {/* Fila rapida de carga */}
@@ -249,7 +249,7 @@ function TablaSetter() {
       {/* Busqueda + filtro + accion de lote */}
       <div className="flex flex-col sm:flex-row gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
             placeholder="Buscar..."
             value={search}
@@ -280,9 +280,9 @@ function TablaSetter() {
       <Card>
         <CardContent className="p-0">
           {isLoading ? (
-            <div className="p-8 text-center text-slate-500">Cargando...</div>
+            <div className="p-8 text-center text-muted-foreground">Cargando...</div>
           ) : filtered.length === 0 ? (
-            <div className="p-8 text-center text-slate-500">
+            <div className="p-8 text-center text-muted-foreground">
               {leads && leads.length > 0
                 ? "No hay leads con ese filtro"
                 : "Todavia no tenes leads — pega un username arriba para arrancar"}
@@ -291,23 +291,23 @@ function TablaSetter() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50">
+                  <tr className="border-b border-border bg-muted/50">
                     <th className="w-10 p-3"></th>
-                    <th className="text-left p-3 font-medium text-slate-500">Nombre</th>
-                    <th className="text-left p-3 font-medium text-slate-500">Instagram</th>
-                    <th className="text-left p-3 font-medium text-slate-500">Estado</th>
-                    <th className="text-left p-3 font-medium text-slate-500">Seguimientos</th>
-                    <th className="text-left p-3 font-medium text-slate-500">Ultimo contacto</th>
-                    <th className="text-left p-3 font-medium text-slate-500">Responsable</th>
-                    <th className="text-left p-3 font-medium text-slate-500">Ultima nota</th>
-                    <th className="text-right p-3 font-medium text-slate-500">Acciones</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Nombre</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Instagram</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Estado</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Seguimientos</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Ultimo contacto</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Responsable</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">Ultima nota</th>
+                    <th className="text-right p-3 font-medium text-muted-foreground">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filtered.map((lead) => {
                     const siguiente = lead.etapaActual ? SIGUIENTE_ETAPA[lead.etapaActual] : undefined;
                     return (
-                      <tr key={lead.id} className="border-b border-slate-100 hover:bg-slate-50">
+                      <tr key={lead.id} className="border-b border-border hover:bg-muted/50">
                         <td className="p-3">
                           <Checkbox
                             checked={selected.has(lead.id)}
@@ -335,19 +335,19 @@ function TablaSetter() {
                         <td className="p-3">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                              etapaColors[lead.etapaActual ?? "A"] ?? "bg-slate-100 text-slate-700"
+                              etapaColors[lead.etapaActual ?? "A"] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                             }`}
                           >
                             {lead.descartado ? lead.motivoDescarte : lead.etapaActual ?? "Sin etapa"}
                           </span>
                         </td>
-                        <td className="p-3 text-slate-600">{lead.seguimientosCount}</td>
-                        <td className="p-3 text-slate-500 text-xs whitespace-nowrap">
+                        <td className="p-3 text-muted-foreground">{lead.seguimientosCount}</td>
+                        <td className="p-3 text-muted-foreground text-xs whitespace-nowrap">
                           {lead.ultimoContacto ? new Date(lead.ultimoContacto).toLocaleString("es-AR") : "-"}
                         </td>
-                        <td className="p-3 text-slate-600">{user?.nombre ?? "-"}</td>
+                        <td className="p-3 text-muted-foreground">{user?.nombre ?? "-"}</td>
                         <td
-                          className="p-3 text-slate-500 text-xs max-w-[180px] truncate"
+                          className="p-3 text-muted-foreground text-xs max-w-[180px] truncate"
                           title={lead.ultimaNota ?? ""}
                         >
                           {lead.ultimaNota ?? "-"}
@@ -486,14 +486,14 @@ function VistaAdmin() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900">Leads</h1>
-          <p className="text-slate-500 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Leads</h1>
+          <p className="text-muted-foreground mt-1">
             {isAdmin ? "Gestion de todos los leads" : "Tus leads asignados"}
           </p>
         </div>
         <div className="flex gap-2">
           <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
               placeholder="Buscar..."
               value={search}
@@ -550,7 +550,7 @@ function VistaAdmin() {
                   </div>
                 )}
                 {error && (
-                  <p className="text-sm text-red-600 bg-red-50 px-3 py-2 rounded-lg">
+                  <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">
                     {error}
                   </p>
                 )}
@@ -568,12 +568,12 @@ function VistaAdmin() {
       </div>
 
       {isLoading ? (
-        <div className="text-center py-12 text-slate-500">
+        <div className="text-center py-12 text-muted-foreground">
           Cargando leads...
         </div>
       ) : !filteredLeads || filteredLeads.length === 0 ? (
         <Card>
-          <CardContent className="py-12 text-center text-slate-500">
+          <CardContent className="py-12 text-center text-muted-foreground">
             {search
               ? "No se encontraron leads con ese criterio"
               : "No hay leads registrados"}
@@ -590,17 +590,17 @@ function VistaAdmin() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-sm font-bold text-slate-600">
+                    <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold text-muted-foreground">
                       {lead.nombre.charAt(0).toUpperCase()}
                     </div>
                     <div>
-                      <p className="font-semibold text-slate-900">
+                      <p className="font-semibold text-foreground">
                         {lead.nombre}
                       </p>
-                      <p className="text-sm text-slate-500">
+                      <p className="text-sm text-muted-foreground">
                         @{lead.instagramUsername}
                       </p>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         Asignado a:{" "}
                         {lead.setterActual
                           ? nombrePorSetterId.get(lead.setterActual) ?? `ID ${lead.setterActual}`
@@ -612,13 +612,13 @@ function VistaAdmin() {
                     <span
                       className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
                         etapaColors[lead.etapaActual ?? "A"] ??
-                        "bg-slate-100 text-slate-700"
+                        "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
                       }`}
                     >
                       {lead.etapaActual ?? "Sin etapa"}
                     </span>
                     {lead.descartado && (
-                      <span className="text-xs text-red-600 font-medium bg-red-50 px-2 py-1 rounded-full">
+                      <span className="text-xs text-destructive font-medium bg-destructive/10 px-2 py-1 rounded-full">
                         {lead.motivoDescarte}
                       </span>
                     )}
@@ -659,7 +659,7 @@ function VistaAdmin() {
                         </DropdownMenu>
                       </div>
                     )}
-                    <ExternalLink className="w-4 h-4 text-slate-300" />
+                    <ExternalLink className="w-4 h-4 text-muted-foreground/50" />
                   </div>
                 </div>
               </CardContent>
