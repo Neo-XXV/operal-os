@@ -72,26 +72,37 @@ export const leadRouter = createRouter({
       return lead;
     }),
 
-  list: authedQuery.query(async ({ ctx }) => {
-    const db = getDb();
-    const allLeads = await db.query.leads.findMany({
-      orderBy: (leads, { desc }) => [desc(leads.id)],
-    });
+  // setterId: uso de ADMIN/MANAGER para el dashboard individual de un setter
+  // (02_reglas_de_negocio.md seccion 10) -- un SETTER lo ignora, se sigue
+  // autofiltrando a si mismo como siempre.
+  list: authedQuery
+    .input(z.object({ setterId: z.number().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = getDb();
+      const allLeads = await db.query.leads.findMany({
+        orderBy: (leads, { desc }) => [desc(leads.id)],
+      });
 
-    const proyecciones = await obtenerProyeccionesLote(db, allLeads.map((l) => l.id));
-    const leadsConProyecciones = allLeads.map((lead) => ({
-      ...lead,
-      ...(proyecciones.get(lead.id) ?? PROYECCION_VACIA),
-    }));
+      const proyecciones = await obtenerProyeccionesLote(db, allLeads.map((l) => l.id));
+      const leadsConProyecciones = allLeads.map((lead) => ({
+        ...lead,
+        ...(proyecciones.get(lead.id) ?? PROYECCION_VACIA),
+      }));
 
-    if (ctx.user.rol === "SETTER") {
-      return leadsConProyecciones.filter(
-        (l) => l.setterActual === ctx.user.id,
-      );
-    }
+      if (ctx.user.rol === "SETTER") {
+        return leadsConProyecciones.filter(
+          (l) => l.setterActual === ctx.user.id,
+        );
+      }
 
-    return leadsConProyecciones;
-  }),
+      if (input?.setterId) {
+        return leadsConProyecciones.filter(
+          (l) => l.setterActual === input.setterId,
+        );
+      }
+
+      return leadsConProyecciones;
+    }),
 
   getById: authedQuery
     .input(z.object({ id: z.number() }))

@@ -1,4 +1,5 @@
-import { createRouter, adminQuery } from "../middleware";
+import { z } from "zod";
+import { createRouter, adminQuery, authedQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { eventos, users } from "@db/schema";
 import { eq, and, desc, gte, inArray, sql } from "drizzle-orm";
@@ -268,4 +269,26 @@ export const anomaliaRouter = createRouter({
     const db = getDb();
     return evaluarAnomalias(db);
   }),
+
+  // Primera UI de ANOMALIA_DETECTADA (dashboard individual por setter, ver
+  // 02_reglas_de_negocio.md seccion 10). Mismo scoping que embudoPorSetter:
+  // un SETTER siempre recibe las suyas, nunca las de otro, sin importar que
+  // setterId haya mandado.
+  listarPorSetter: authedQuery
+    .input(z.object({ setterId: z.number() }))
+    .query(async ({ ctx, input }) => {
+      const db = getDb();
+      const setterId = ctx.user.rol === "SETTER" ? ctx.user.id : input.setterId;
+
+      const anomalias = await db.query.eventos.findMany({
+        where: and(
+          eq(eventos.tipo, "ANOMALIA_DETECTADA"),
+          sql`CAST(${eventos.payload}->>'$.setter_id' AS UNSIGNED) = ${setterId}`,
+        ),
+        orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+        with: { lead: true },
+      });
+
+      return anomalias;
+    }),
 });

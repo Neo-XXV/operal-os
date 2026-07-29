@@ -969,17 +969,25 @@ export const eventRouter = createRouter({
   // constantemente") y atribuir todo al dueno de hoy le daria/quitaria
   // credito por trabajo que no hizo. Documentado tambien en
   // 03_catalogo_eventos.md junto a la regla de "setter actual".
-  embudoPorSetter: adminQuery
+  // Sprint "dashboards individuales": authedQuery (ya no adminQuery) para que
+  // un SETTER pueda pedir su propio detalle -- el scoping de abajo es la
+  // barrera real, no depende de que el frontend pida bien. Un SETTER SIEMPRE
+  // recibe unicamente su propia fila en `setters` (nunca la lista completa),
+  // sin importar que `setterId` haya mandado o no.
+  embudoPorSetter: authedQuery
     .input(
       z.object({
         periodo: z.enum(["lifetime", "mensual", "trimestral", "semestral", "anual", "rango"]),
         desde: z.coerce.date().optional(),
         hasta: z.coerce.date().optional(),
+        setterId: z.number().optional(),
       }),
     )
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = getDb();
       const ventana = resolverVentana(input.periodo, input.desde, input.hasta);
+
+      const setterIdForzado = ctx.user.rol === "SETTER" ? ctx.user.id : input.setterId;
 
       const condicionesEstado = [eq(eventos.tipo, "ESTADO_CAMBIADO"), lte(eventos.timestamp, ventana.hasta)];
       if (ventana.desde) condicionesEstado.push(gte(eventos.timestamp, ventana.desde));
@@ -993,7 +1001,7 @@ export const eventRouter = createRouter({
       // LEAD_ASIGNADO se trae SIN acotar por fecha: un intervalo de dueño que
       // arranco antes del periodo pero sigue abierto necesita su historial
       // completo para resolverse bien.
-      const [asignaciones, setters] = await Promise.all([
+      const [asignaciones, settersTodos] = await Promise.all([
         leadIdsEnPeriodo.length > 0
           ? db.query.eventos.findMany({
               where: and(eq(eventos.tipo, "LEAD_ASIGNADO"), inArray(eventos.leadId, leadIdsEnPeriodo)),
@@ -1005,10 +1013,14 @@ export const eventRouter = createRouter({
         }),
       ]);
 
+      const setters = setterIdForzado
+        ? settersTodos.filter((s) => s.id === setterIdForzado)
+        : settersTodos;
+
       const eventosPorSetter = construirAsignacionPorSetter(cambiosEstado, asignaciones);
 
-      // Se incluyen todos los setters, incluidos inactivos y los que no
-      // tuvieron actividad en el periodo — esa ausencia es informacion.
+      // Se incluyen todos los setters pedidos, incluidos inactivos y los que
+      // no tuvieron actividad en el periodo — esa ausencia es informacion.
       const setterStats = setters.map((s) => ({
         id: s.id,
         nombre: s.nombre,
