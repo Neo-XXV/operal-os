@@ -81,8 +81,11 @@ export const eventos = mysqlTable(
       "CALENDAR_EVENTO_CREADO",
       "CALENDAR_EVENTO_ACTUALIZADO",
       "CALENDAR_EVENTO_SINCRONIZADO",
+      "ANOMALIA_DETECTADA",
     ]).notNull(),
-    leadId: bigint("lead_id", { mode: "number", unsigned: true }).notNull(),
+    // Nullable: unico caso es ANOMALIA_DETECTADA de nivel SETTER/EQUIPO (sin
+    // lead asociado) -- ver docs/03_catalogo_eventos.md evento 14.
+    leadId: bigint("lead_id", { mode: "number", unsigned: true }),
     actorTipo: mysqlEnum("actor_tipo", ["SETTER", "MANAGER", "ADMIN", "SISTEMA"])
       .notNull(),
     actorId: bigint("actor_id", {
