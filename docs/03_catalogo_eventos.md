@@ -29,7 +29,7 @@ Si un evento propuesto no cumple los 4 puntos, no entra al catálogo — se resu
 Evento
   id
   tipo          (ej: ESTADO_CAMBIADO)
-  lead_id       (solo para eventos de Lead — ver sección de alcance)
+  lead_id       (solo para eventos de Lead — ver sección de alcance; nullable — único caso: ANOMALIA_DETECTADA de nivel SETTER/EQUIPO, evento 14)
   actor_tipo    (SETTER | MANAGER | ADMIN | SISTEMA)
   actor_id
   timestamp
@@ -38,7 +38,7 @@ Evento
 
 ## Alcance de este documento
 
-Este catálogo cubre exclusivamente **eventos del Lead** — hechos que ocurren sobre un lead individual y llevan `lead_id`. Los eventos administrativos (importaciones, altas/bajas de setters, reportes diarios) no pertenecen a este historial y se documentan aparte en `09_eventos_administrativos.md` (pendiente).
+Este catálogo cubre **eventos del Lead** — hechos que ocurren sobre un lead individual y llevan `lead_id` — con una única excepción: `ANOMALIA_DETECTADA` (evento 14) cuando es de nivel `SETTER` o `EQUIPO`, que no tiene un lead asociado y por lo tanto no lleva `lead_id` (columna `null` en ese caso). Los eventos administrativos (importaciones, altas/bajas de setters, reportes diarios) siguen sin pertenecer a este historial y se documentan aparte en `09_eventos_administrativos.md` (pendiente).
 
 ---
 
@@ -405,6 +405,76 @@ Taxonomía cerrada (definida con el dueño del negocio):
 
 ---
 
+### 14. `ANOMALIA_DETECTADA`
+
+**Descripción:** El sistema detecta, por cálculo de umbrales (sin IA, sin modelo, sin API externa — puro cálculo sobre el Event Log y el calendario interno), que una tasa de conversión o un lead individual está fuera de los parámetros esperados, y registra el hecho de haberlo detectado. La **alerta** (lo que eventualmente se le muestra a un usuario) no es este evento — se calcula y se muestra en el momento de consulta, nunca se guarda. Lo que se guarda acá es el hecho de que el sistema, en tal momento, detectó tal condición: si un umbral cambia más adelante, la alerta de hoy puede cambiar, pero el hecho de que el sistema detectó esto en tal fecha, con tal valor medido, no cambia — mismo principio que distingue "estado actual" (proyección) de "evento" en el resto del sistema (ver `08_modelo_de_datos.md`).
+
+**Quién lo genera:** Sistema (`actor_tipo = SISTEMA`, `actor_id = null`) — el caso de uso que ya anticipaba ese actor en `08_modelo_de_datos.md`.
+
+**Cuándo ocurre:** En cada corrida de la evaluación periódica (ver `02_reglas_de_negocio.md` sección 9), cuando una condición de anomalía pasa de "no cumplida" a "cumplida" para un sujeto dado (lead, setter o equipo) — nunca en cada corrida mientras la condición sigue vigente sin cambios (ver idempotencia abajo).
+
+**Dos familias, dos formas de payload:**
+
+**A. Anomalías de conversión** (`MSR_BAJO`, `PRR_BAJO`, `CSR_BAJO`) — sujeto es un setter o el equipo completo:
+
+```json
+{
+  "tipo_anomalia": "MSR_BAJO",
+  "nivel": "SETTER",
+  "setter_id": 5,
+  "tasa_medida": 0.18,
+  "umbral_anomalia": 0.25,
+  "objetivo": 0.33,
+  "numerador": 40,
+  "denominador": 220
+}
+```
+
+- `tipo_anomalia`: `MSR_BAJO` (A→MS) | `PRR_BAJO` (MS→B) | `CSR_BAJO` (B→C).
+- `nivel`: `SETTER` | `EQUIPO`. `CSR_BAJO` es siempre `EQUIPO` — es la única de las tres que se evalúa a nivel de equipo, no por setter individual (un setter no junta volumen estadístico en B→C; ver `02_reglas_de_negocio.md` sección 9).
+- `setter_id`: `null` cuando `nivel = EQUIPO`.
+- `tasa_medida`/`numerador`/`denominador`: la tasa observada al momento de detectar y los conteos que la componen — quedan grabados aunque el umbral cambie después.
+- `umbral_anomalia`/`objetivo`: el umbral violado y el objetivo de referencia, vigentes al momento de detectar (fuente única: `anomaliaConfig.ts`, ver `02_reglas_de_negocio.md` sección 9).
+
+Este evento **no lleva `lead_id`** — la columna queda `null` (ver excepción de alcance más arriba y `08_modelo_de_datos.md`).
+
+**B. Anomalías de tiempo** (`TIEMPO_A_MS`, `TIEMPO_MS_B`, `TIEMPO_B_C`, `TIEMPO_C_D`) — sujeto es un lead individual:
+
+```json
+{
+  "tipo_anomalia": "TIEMPO_B_C",
+  "atribuible_a": "SETTER",
+  "setter_id": 7,
+  "horas_transcurridas": 80.5,
+  "umbral_horas": 72,
+  "desde": "2026-07-25T10:00:00.000Z"
+}
+```
+
+- `tipo_anomalia`: `TIEMPO_A_MS` | `TIEMPO_MS_B` | `TIEMPO_B_C` | `TIEMPO_C_D`.
+- `atribuible_a`: `LEAD` | `SETTER` — fijo por `tipo_anomalia` (no varía instancia a instancia), se guarda igual para no obligar a un lookup en cada consumidor: `TIEMPO_A_MS` → `LEAD`, `TIEMPO_MS_B` → `SETTER`, `TIEMPO_B_C` → `SETTER`, `TIEMPO_C_D` → `LEAD`.
+- `setter_id`: dueño del lead (último `LEAD_ASIGNADO`) al momento de detectar — puede ser `null` si el lead nunca se asignó. **Limitación conocida:** no es necesariamente quien causó la demora si hubo una reasignación en el medio — ver `99_deuda_tecnica.md`.
+- `horas_transcurridas`/`umbral_horas`: horas reales transcurridas y el umbral violado (fuente: `anomaliaConfig.ts`). Para `TIEMPO_C_D`, `umbral_horas` es el tiempo hasta la fecha de la llamada (evento de Calendar vigente del lead, ver `08_modelo_de_datos.md`) o, si no hay evento con fecha, el default de 48h.
+- `desde`: timestamp del evento que arranca el conteo de esa transición (el `ESTADO_CAMBIADO` a la etapa de origen).
+
+Este evento **sí lleva `lead_id`** — el lead afectado, igual que el resto del catálogo.
+
+**Idempotencia (evita duplicar el Event Log en cada corrida mientras la condición sigue vigente):**
+
+- **Anomalías de tiempo:** el embudo es secuencial y sin retroceso (`02_reglas_de_negocio.md` sección 2) — cada lead pasa por cada transición como máximo una vez en su vida. Alcanza con chequear existencia: si ya existe un `ANOMALIA_DETECTADA` con ese `tipo_anomalia` y ese `lead_id`, no se inserta uno nuevo. No puede volver a hacer falta, porque esa espera puntual no puede repetirse para ese lead.
+- **Anomalías de conversión:** la tasa fluctúa (sube y baja con cada lead nuevo), así que sí puede resolverse y reaparecer. Se detecta el **borde** (edge-triggered), no el nivel: antes de insertar, se recalcula la tasa **excluyendo el evento `ESTADO_CAMBIADO` más reciente que la afecta**. Si la tasa sin ese último evento ya era anómala (o el piso ya se cumplía y ya estaba mal) → continuación de un episodio ya registrado → no se inserta nada. Si la tasa sin ese último evento no era anómala (o no llegaba al piso) pero con él sí → ese es el instante exacto de la transición a anómalo → se inserta el evento. Esto es correcto sin importar cada cuánto corre la evaluación (ver `02_reglas_de_negocio.md` sección 9) — siempre encuentra el mismo punto de cruce reprocesando el historial, no depende de una ventana de tiempo.
+
+**Cumple el criterio de 4 puntos de este documento:**
+
+1. Es un hecho irreversible: el sistema detectó tal condición en tal momento, con tal valor medido — eso no cambia si el umbral cambia después.
+2. No se reconstruye de otros eventos: sin este evento no queda registro de *cuándo* el sistema detectó la anomalía por primera vez (la tasa o el tiempo actual siempre se pueden recalcular, pero no el instante de detección).
+3. Aporta trazabilidad real: permite auditar cuándo empezó cada episodio anómalo, y alimenta el módulo de dashboards individuales (siguiente, fuera de este alcance).
+4. No es la alerta en sí (que se calcula y se muestra, nunca se guarda), no es una regla ni un KPI — es el registro de que el sistema aplicó la regla y encontró una violación.
+
+**Dispara:** módulo de dashboards de anomalías (siguiente, fuera de este alcance) — este evento solo detecta y registra, no visualiza.
+
+---
+
 ## Resumen
 
 | # | Evento | Actor típico | ¿Tiene payload variable? |
@@ -422,11 +492,12 @@ Taxonomía cerrada (definida con el dueño del negocio):
 | 11 | `CALENDAR_EVENTO_CREADO` | Setter / Admin | Sí (google_event_id opcional, horario) |
 | 12 | `CALENDAR_EVENTO_ACTUALIZADO` | Setter / Admin | Sí (google_event_id opcional, horario) |
 | 13 | `CALENDAR_EVENTO_SINCRONIZADO` | Setter / Admin | Sí (google_event_id obligatorio, horario sin cambios) |
+| 14 | `ANOMALIA_DETECTADA` | Sistema | Sí (dos formas: conversión o tiempo) |
 
 ## Pendiente fuera de este documento
 
 - Eventos administrativos (`IMPORTACION_REALIZADA`, `SETTER_CREADO`, `SETTER_DESACTIVADO`, `REPORTE_DIARIO_ENVIADO`) → `09_eventos_administrativos.md`.
-- Eventos generados por IA (`ANOMALIA_DETECTADA` y similares) → pospuestos a V2, se diseñan recién cuando exista la funcionalidad de IA.
+- Detección de anomalías **basada en IA/modelo** (más allá de `ANOMALIA_DETECTADA`, que ya está en este catálogo como cálculo de umbrales sin IA — ver evento 14) → si en el futuro se agrega, se diseña aparte cuando exista esa funcionalidad.
 - Respuesta a: ¿las objeciones nuevas se revisan y suman a una guía central, o quedan archivadas?
 
 ---

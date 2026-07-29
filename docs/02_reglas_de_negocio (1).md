@@ -93,3 +93,32 @@ Si la respuesta es no a ambas, esa acción no debe existir en la V1.
 
 ### Decisiones de arquitectura para versiones futuras
 - OPERAL OS V1 es **single-tenant**. Toda la aplicación opera para una única clínica. El soporte para múltiples clínicas (multi-tenant) queda fuera del alcance de esta versión y se evaluará en una versión futura cuando exista esa necesidad.
+
+## 9. Detección de anomalías por reglas
+
+*(Módulo de detección y registro únicamente — no incluye visualización. La UI de anomalías (dashboards individuales) es un módulo siguiente, fuera de este alcance.)*
+
+- **No es IA ni un modelo externo.** Es cálculo puro de umbrales sobre el Event Log y el calendario interno (`CALENDAR_EVENTO_CREADO`/`ACTUALIZADO`/`SINCRONIZADO`, ver sección 8). Los umbrales viven en `anomaliaConfig.ts` (código) como única fuente — no se guardan en la base ni se calculan distinto en dos lugares.
+- **Detectar una anomalía es un hecho; la alerta no lo es.** Cuando el sistema detecta que una condición se cumple, registra `ANOMALIA_DETECTADA` (`03_catalogo_eventos.md` evento 14) con actor `SISTEMA`. La alerta (lo que un usuario ve) se calcula y se muestra al consultar, nunca se guarda — si el umbral cambia, la alerta cambia; el evento ya registrado no.
+- **La evaluación corre periódicamente** (barrido dentro del proceso de la aplicación, cadencia configurable — pensada en torno a 1 hora) y también puede dispararse manualmente. El resultado de una corrida no depende de cuándo corrió la anterior — ver idempotencia en `03_catalogo_eventos.md` evento 14.
+
+### Anomalías de conversión (tasa, con piso de datos)
+
+- **Piso:** no se evalúa a un setter hasta que acumule 300 leads contactados (llegados a `A`). Por debajo del piso, el sistema no marca ni bueno ni anómalo — "datos insuficientes". Evita marcar como anómalo a un setter nuevo por poco volumen.
+- **MSR (A→MS):** anomalía si peor que 1 de 4 (25%). Objetivo: 1 de 3 (33%). Por setter.
+- **PRR (MS→B):** anomalía si peor que 1 de 2 (50%). Por setter.
+- **CSR (B→C):** anomalía si peor que 1 de 35 (~2,85%). Objetivo: 1 de 20 (5%). **Se evalúa a nivel de equipo, no por setter** — con esta conversión un setter individual no junta volumen estadístico suficiente. Es la única de las tres anomalías de conversión que es de equipo.
+- No hay una anomalía de conversión "ABR" — ver más abajo, C→D es puramente de tiempo y la reemplaza.
+
+### Anomalías de tiempo (lead individual atascado)
+
+Usan timestamps del Event Log y, para C→D, la fecha del calendario interno del lead (`CALENDAR_EVENTO_CREADO`/`ACTUALIZADO`/`SINCRONIZADO` vigente, ver `08_modelo_de_datos.md`).
+
+- **A→MS:** más de 24h desde el primer mensaje sin que el lead responda. **Anomalía del lead**, no del setter — el setter no controla cuándo responde la persona. Se mide con el timestamp del `ESTADO_CAMBIADO` a `MS` (ese evento ya marca cuándo respondió; no hace falta registrar nada nuevo).
+- **MS→B:** más de 24h desde que respondió sin que se envíe la propuesta. **Anomalía del setter.**
+- **B→C:** más de 72h en `B` sin pasar a `C`. **Anomalía del setter.** El flujo esperado es día 1 propuesta, día 2 seguimiento, día 3 seguimiento; a las 72h la anomalía indica que el setter debe mandar el último seguimiento y descartar a las 24h si no hay respuesta.
+- **C→D:** el lead está en `C` y no confirmó (no pasó a `D`) pasado el tiempo permitido. **Anomalía del lead** (mismo criterio que A→MS: el setter ya hizo su parte al agendar; que el lead confirme no está bajo su control). El tiempo permitido es hasta la fecha de la llamada (evento de calendario interno vigente de ese lead); si no hay evento con fecha, el límite por defecto es 48h. **Reemplaza cualquier anomalía de tasa "ABR"** — no existe una anomalía de conversión ABR separada; C→D es puramente de tiempo.
+
+### Umbrales
+
+Todos los valores de esta sección (piso de 300, los cuatro umbrales de tasa, los cuatro umbrales de horas, el default de 48h de C→D) están centralizados en `anomaliaConfig.ts` como constantes de código — es la única fuente, no se duplican en otro lugar. El diseño deja abierta la posibilidad de hacerlos configurables (por ejemplo, desde una tabla o panel de administración) más adelante sin reescribir la lógica de evaluación — el día que eso se necesite, solo cambia de dónde sale el objeto de configuración.

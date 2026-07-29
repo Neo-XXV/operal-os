@@ -12,7 +12,7 @@ Cualquier representación del estado actual (lead asignado, etapa actual, embudo
 
 Las proyecciones pueden optimizarse mediante consultas, vistas o vistas materializadas, pero nunca deben convertirse en la fuente de verdad del sistema.
 
-**Aclaración:** esto aplica a todo estado que sea *derivable* de eventos ya existentes (por ejemplo, "etapa actual de un lead" siempre se calcula, nunca se guarda aparte). No aplica de la misma forma a un evento nuevo que el sistema decide registrar como hecho — por ejemplo, si en V2 la IA detecta una anomalía y decide guardarla como `ANOMALIA_DETECTADA`, eso es un evento legítimo (algo que ocurrió, con actor `SISTEMA`), no una proyección. La regla no es "nunca guardar nada calculado por el sistema", es "el estado actual nunca vive fuera del Event Log como si fuera él mismo la verdad".
+**Aclaración:** esto aplica a todo estado que sea *derivable* de eventos ya existentes (por ejemplo, "etapa actual de un lead" siempre se calcula, nunca se guarda aparte). No aplica de la misma forma a un evento nuevo que el sistema decide registrar como hecho — por ejemplo, cuando la detección de anomalías por reglas (sin IA, cálculo puro de umbrales — ver `02_reglas_de_negocio.md` sección 9) encuentra una condición y la guarda como `ANOMALIA_DETECTADA`, eso es un evento legítimo (algo que el sistema detectó, con actor `SISTEMA`), no una proyección — aunque la tasa o el tiempo transcurrido que lo originó siempre se puedan recalcular desde los eventos. La regla no es "nunca guardar nada calculado por el sistema", es "el estado actual nunca vive fuera del Event Log como si fuera él mismo la verdad".
 
 Si Kimi entiende esta sección, la mayoría de las decisiones de implementación durante el desarrollo deberían resolverse solas, sin necesidad de consultar cada caso puntual.
 
@@ -57,8 +57,8 @@ Evento
   tipo          (LEAD_CREADO | LEAD_ASIGNADO | ESTADO_CAMBIADO | SEGUIMIENTO_ENVIADO |
                  RESPUESTA_RECIBIDA | OBJECION_REGISTRADA | LEAD_DESCARTADO | NOTA_AGREGADA |
                  LLAMADA_REGISTRADA | PAGO_REGISTRADO | CALENDAR_EVENTO_CREADO |
-                 CALENDAR_EVENTO_ACTUALIZADO | CALENDAR_EVENTO_SINCRONIZADO)
-  lead_id       (FK a Lead)
+                 CALENDAR_EVENTO_ACTUALIZADO | CALENDAR_EVENTO_SINCRONIZADO | ANOMALIA_DETECTADA)
+  lead_id       (FK a Lead, nullable — único caso: ANOMALIA_DETECTADA de nivel SETTER/EQUIPO, ver 03_catalogo_eventos.md evento 14)
   actor_tipo    (SETTER | MANAGER | ADMIN | SISTEMA)
   actor_id      (FK a Usuario, nulo si actor_tipo = SISTEMA)
   timestamp
@@ -114,6 +114,7 @@ Estas son ejemplos de vistas derivadas que el sistema va a necesitar calcular fr
 - **Cash collected de un lead (Sprint 4):** suma de los montos de todos los `PAGO_REGISTRADO` de ese lead.
 - **Evento de Calendar vigente de un lead (Sprint 5):** el más reciente entre todos los `CALENDAR_EVENTO_CREADO`/`CALENDAR_EVENTO_ACTUALIZADO`/`CALENDAR_EVENTO_SINCRONIZADO` de ese `lead_id`, ordenados por `timestamp` — mismo criterio de "último evento gana" que ya usa "etapa actual" o "setter actual". Ese evento trae el horario a mostrar en la vista de calendario interna (siempre disponible, no depende de Google) y, si tiene `google_event_id`, el id a usar para el botón "Editar"/vista de Google; si no lo tiene, habilita el botón "Sincronizar con Google".
 - **Agenda local de un rango de fechas (Sprint 5b):** todos los eventos vigentes (mismo criterio que el punto anterior, aplicado por lead) cuyo `fecha_hora_inicio` cae dentro del rango pedido — es la proyección que alimenta la vista de calendario interna de OPERAL OS, calculada leyendo `eventos` directo, sin llamar a la API de Google en ningún punto.
+- **¿Ya hay una anomalía vigente para un sujeto? (módulo de detección de anomalías):** para anomalías de tiempo, un lookup directo — existe un `ANOMALIA_DETECTADA` con ese `tipo_anomalia` y ese `lead_id` (ver `03_catalogo_eventos.md` evento 14). Para anomalías de conversión (setter/equipo) no es un lookup directo: se recalcula la tasa excluyendo el `ESTADO_CAMBIADO` más reciente que la afecta, para determinar si el episodio actual ya estaba registrado o es una transición nueva — mismo evento 14, idempotencia por borde (edge-triggered), no por ventana de tiempo.
 
 Si el volumen de datos lo justifica más adelante, estas consultas pueden optimizarse con vistas materializadas — pero siguen siendo proyecciones, nunca la fuente de verdad.
 
