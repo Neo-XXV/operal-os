@@ -96,7 +96,7 @@ Si la respuesta es no a ambas, esa acción no debe existir en la V1.
 
 ## 9. Detección de anomalías por reglas
 
-*(Módulo de detección y registro únicamente — no incluye visualización. La UI de anomalías (dashboards individuales) es un módulo siguiente, fuera de este alcance.)*
+*(Módulo de detección y registro únicamente — no incluye visualización. La UI de anomalías vive en los dashboards individuales por setter, ver sección 10.)*
 
 - **No es IA ni un modelo externo.** Es cálculo puro de umbrales sobre el Event Log y el calendario interno (`CALENDAR_EVENTO_CREADO`/`ACTUALIZADO`/`SINCRONIZADO`, ver sección 8). Los umbrales viven en `anomaliaConfig.ts` (código) como única fuente — no se guardan en la base ni se calculan distinto en dos lugares.
 - **Detectar una anomalía es un hecho; la alerta no lo es.** Cuando el sistema detecta que una condición se cumple, registra `ANOMALIA_DETECTADA` (`03_catalogo_eventos.md` evento 14) con actor `SISTEMA`. La alerta (lo que un usuario ve) se calcula y se muestra al consultar, nunca se guarda — si el umbral cambia, la alerta cambia; el evento ya registrado no.
@@ -122,3 +122,16 @@ Usan timestamps del Event Log y, para C→D, la fecha del calendario interno del
 ### Umbrales
 
 Todos los valores de esta sección (piso de 300, los cuatro umbrales de tasa, los cuatro umbrales de horas, el default de 48h de C→D) están centralizados en `anomaliaConfig.ts` como constantes de código — es la única fuente, no se duplican en otro lugar. El diseño deja abierta la posibilidad de hacerlos configurables (por ejemplo, desde una tabla o panel de administración) más adelante sin reescribir la lógica de evaluación — el día que eso se necesite, solo cambia de dónde sale el objeto de configuración.
+
+## 10. Dashboards individuales por setter
+
+*(Módulo de visualización — primera UI de `ANOMALIA_DETECTADA` (sección 9). No introduce eventos nuevos ni cambia permisos existentes: expone en una pantalla nueva mecanismos que ya existían.)*
+
+- **Visibilidad:** un `SETTER` puede ver únicamente su propio dashboard individual. Un `ADMIN`/`MANAGER` puede ver el de cualquier setter, además del dashboard ejecutivo general (Sprint 3, sigue existiendo sin cambios). No contradice la regla de que un setter solo ve sus propios leads — esa regla acota la visibilidad del setter, no la visibilidad que el admin ya tiene sobre el conjunto en el resto del sistema (Leads sin filtrar, Event Log, dashboard ejecutivo).
+- **Naturaleza:** es una vista calculada (proyección), no una entidad — no se crea ni se guarda nada al dar de alta un usuario `SETTER`. El dashboard "existe" por el solo hecho de que el usuario tiene ese rol, aunque no tenga eventos todavía (estado vacío en ese caso). Ver `08_modelo_de_datos.md`.
+- **Contenido:** el embudo del setter (MSR/PRR/CSR/ABR sobre sus leads, misma atribución por intervalo de tiempo que ya usa la comparación por setter del dashboard ejecutivo, con período seleccionable), su lista de leads, y sus eventos `ANOMALIA_DETECTADA` — las de tiempo atribuidas a él por `setter_id`, y las de conversión de nivel `SETTER` con ese `setter_id`. Las anomalías de nivel `EQUIPO` (`CSR_BAJO`) no aparecen acá — son del dashboard general.
+- **Acciones disponibles desde el dashboard (acotadas — no reemplaza `LeadDetail`):**
+  - **Descartar** (`LEAD_DESCARTADO`): el `SETTER` puede descartar sus propios leads desde su dashboard — mismo permiso que ya tiene hoy desde cualquier otra pantalla, no uno nuevo. El `ADMIN` puede descartar el lead de cualquier setter desde el dashboard de ese setter — mismo permiso que ya tiene hoy.
+  - **Reasignar** (`LEAD_ASIGNADO`): exclusivo de `ADMIN`/`MANAGER`, sin cambios respecto de hoy. Por eso solo aparece cuando un admin ve el dashboard de un setter — nunca en el dashboard propio de un setter, que no tiene ni va a tener ese permiso.
+  - Todo lo demás (avanzar etapa, seguimiento, objeción, nota) sigue siendo exclusivo de `LeadDetail` — el dashboard es un panel de gestión acotado a esas dos acciones, no la pantalla de trabajo diario sobre un lead.
+- **Atribución:** los eventos generados desde el dashboard se registran con el actor real que los generó (`actor_tipo`/`actor_id` del usuario logueado). Un `ADMIN` operando desde el dashboard de un setter nunca queda registrado como si fuera ese setter — el Event Log no se presta a eso.
