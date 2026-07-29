@@ -32,7 +32,9 @@ const PROMPT_SISTEMA_BASE =
   "Solo podes usar los numeros que aparecen en el JSON de contexto que se te da -- nunca inventes " +
   "una tasa, un conteo o un umbral que no este ahi. Si falta un dato para responder con precision, " +
   "decilo explicitamente en vez de estimarlo. No sugieras acciones automaticas ni ejecutables: tu " +
-  "respuesta es solo lectura, la decide y ejecuta un humano. Responde en espanol, en un parrafo breve.";
+  "respuesta es solo lectura, la decide y ejecuta un humano. Responde en espanol, en un parrafo breve. " +
+  "No uses separador de miles en los numeros (escribi 1601, nunca 1.601 ni 1,601) -- se necesita poder " +
+  "verificar cada numero contra el contexto de forma automatica.";
 
 type AnomaliaConversionPayload = {
   tipo_anomalia: string;
@@ -213,6 +215,49 @@ async function obtenerKpisMesActual(db: ReturnType<typeof getDb>) {
   };
 }
 
+const TRANSICIONES_CLAVE = ["A_a_MS", "MS_a_B", "B_a_C", "C_a_D"] as const;
+type TiemposEntreEtapas = Record<(typeof TRANSICIONES_CLAVE)[number], number | null> & { en_etapa_actual: number | null };
+
+// Funcion pura nueva -- no existia una version por-lead de esto (el motor
+// de anomalias solo necesita "tiempo desde la ultima transicion", no el
+// desglose completo). Recorre los ESTADO_CAMBIADO de UN lead ya ordenados
+// cronologicamente y calcula el delta entre cada transicion consecutiva;
+// `en_etapa_actual` es el tramo abierto desde la ultima transicion hasta
+// `hastaFinal` (el descarte, o ahora si sigue activo).
+export function calcularTiemposEntreEtapas(
+  cambiosOrdenados: { timestamp: Date; payload: unknown }[],
+  hastaFinal: Date,
+): TiemposEntreEtapas {
+  const resultado: TiemposEntreEtapas = {
+    A_a_MS: null,
+    MS_a_B: null,
+    B_a_C: null,
+    C_a_D: null,
+    en_etapa_actual: null,
+  };
+  if (cambiosOrdenados.length === 0) return resultado;
+
+  for (let i = 1; i < cambiosOrdenados.length; i++) {
+    const anterior = (cambiosOrdenados[i - 1].payload as { estado_nuevo: string }).estado_nuevo;
+    const actual = (cambiosOrdenados[i].payload as { estado_nuevo: string }).estado_nuevo;
+    const clave = `${anterior}_a_${actual}` as (typeof TRANSICIONES_CLAVE)[number];
+    if (TRANSICIONES_CLAVE.includes(clave)) {
+      const horas = (cambiosOrdenados[i].timestamp.getTime() - cambiosOrdenados[i - 1].timestamp.getTime()) / 3_600_000;
+      resultado[clave] = Math.round(horas * 10) / 10;
+    }
+  }
+
+  const ultimo = cambiosOrdenados[cambiosOrdenados.length - 1];
+  const horasEnEtapaActual = (hastaFinal.getTime() - ultimo.timestamp.getTime()) / 3_600_000;
+  resultado.en_etapa_actual = Math.round(horasEnEtapaActual * 10) / 10;
+
+  return resultado;
+}
+
+const UMBRAL_AGREGACION = 30;
+const ETAPAS_POSIBLES = ["A", "MS", "B", "C", "D", "Sin etapa"] as const;
+const ORIGENES_POSIBLES = ["SCRAPING", "MANUAL", "RPP"] as const;
+
 export const iaRouter = createRouter({
   // Primera funcionalidad de docs/10_arquitectura_ia.md seccion 8 (#1) --
   // mutation, no query: llama a un proveedor externo de pago con cada
@@ -319,4 +364,144 @@ export const iaRouter = createRouter({
 
     return { respuesta, advertencia };
   }),
+
+  // Cuarta funcionalidad de docs/10_arquitectura_ia.md seccion 8 (#4).
+  // Umbral de 30 (acordado con el usuario, doc sugiere 20-30): por debajo
+  // se manda una fila por lead, por encima se agrega por segmento -- nunca
+  // se trunca en silencio, el alcance "descartados" no tiene limite de
+  // query (el filtro define la poblacion).
+  analizarLeads: adminQuery
+    .input(
+      z.object({
+        alcance: z.enum(["recientes", "descartados"]),
+        limite: z.number().min(1).max(500).default(50),
+        motivoDescarte: z.string().optional(),
+        desde: z.coerce.date().optional(),
+        hasta: z.coerce.date().optional(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const db = getDb();
+
+      let leadIds: number[];
+      if (input.alcance === "recientes") {
+        const creaciones = await db.query.eventos.findMany({
+          where: eq(eventos.tipo, "LEAD_CREADO"),
+          orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+          limit: input.limite,
+        });
+        leadIds = creaciones.map((e) => e.leadId as number);
+      } else {
+        const condiciones = [eq(eventos.tipo, "LEAD_DESCARTADO")];
+        if (input.desde) condiciones.push(gte(eventos.timestamp, input.desde));
+        if (input.hasta) condiciones.push(lte(eventos.timestamp, input.hasta));
+        const descartes = await db.query.eventos.findMany({ where: and(...condiciones) });
+        leadIds = descartes
+          .filter((e) => !input.motivoDescarte || (e.payload as { motivo: string }).motivo === input.motivoDescarte)
+          .map((e) => e.leadId as number);
+      }
+
+      if (leadIds.length === 0) {
+        throw new Error("No hay leads que coincidan con el alcance pedido.");
+      }
+
+      const [cambios, creaciones, descartesTodos, seguimientos] = await Promise.all([
+        db.query.eventos.findMany({ where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "ESTADO_CAMBIADO")) }),
+        db.query.eventos.findMany({ where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "LEAD_CREADO")) }),
+        db.query.eventos.findMany({ where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "LEAD_DESCARTADO")) }),
+        db.query.eventos.findMany({ where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "SEGUIMIENTO_ENVIADO")) }),
+      ]);
+
+      const cambiosPorLead = new Map<number, { timestamp: Date; id: number; payload: unknown }[]>();
+      for (const ev of cambios) {
+        const id = ev.leadId as number;
+        const lista = cambiosPorLead.get(id);
+        if (lista) lista.push(ev);
+        else cambiosPorLead.set(id, [ev]);
+      }
+      for (const lista of cambiosPorLead.values()) {
+        lista.sort((a, b) => a.timestamp.getTime() - b.timestamp.getTime() || a.id - b.id);
+      }
+
+      const origenPorLead = new Map<number, string>();
+      for (const ev of creaciones) origenPorLead.set(ev.leadId as number, (ev.payload as { origen: string }).origen);
+
+      const descartePorLead = new Map<number, { motivo: string; timestamp: Date }>();
+      for (const ev of descartesTodos) {
+        const id = ev.leadId as number;
+        if (!descartePorLead.has(id)) {
+          descartePorLead.set(id, { motivo: (ev.payload as { motivo: string }).motivo, timestamp: ev.timestamp });
+        }
+      }
+
+      const seguimientosPorLead = new Map<number, number>();
+      for (const ev of seguimientos) {
+        const id = ev.leadId as number;
+        seguimientosPorLead.set(id, (seguimientosPorLead.get(id) ?? 0) + 1);
+      }
+
+      const etapaAlcanzada = (id: number): (typeof ETAPAS_POSIBLES)[number] => {
+        const cambiosLead = cambiosPorLead.get(id);
+        if (!cambiosLead || cambiosLead.length === 0) return "Sin etapa";
+        return (cambiosLead[cambiosLead.length - 1].payload as { estado_nuevo: string }).estado_nuevo as (typeof ETAPAS_POSIBLES)[number];
+      };
+
+      let contexto: Record<string, unknown>;
+
+      if (leadIds.length > UMBRAL_AGREGACION) {
+        const porEtapa: Record<string, number> = Object.fromEntries(ETAPAS_POSIBLES.map((e) => [e, 0]));
+        const porOrigen: Record<string, number> = Object.fromEntries(ORIGENES_POSIBLES.map((o) => [o, 0]));
+        let totalSeguimientos = 0;
+        for (const id of leadIds) {
+          porEtapa[etapaAlcanzada(id)]++;
+          const origen = origenPorLead.get(id);
+          if (origen && origen in porOrigen) porOrigen[origen]++;
+          totalSeguimientos += seguimientosPorLead.get(id) ?? 0;
+        }
+        contexto = {
+          alcance: input.alcance,
+          motivo_filtro: input.motivoDescarte ?? null,
+          total: leadIds.length,
+          por_etapa_alcanzada: porEtapa,
+          por_origen: porOrigen,
+          promedio_seguimientos: Math.round((totalSeguimientos / leadIds.length) * 10) / 10,
+        };
+      } else {
+        const leads = leadIds.map((id) => {
+          const cambiosLead = cambiosPorLead.get(id) ?? [];
+          const descarte = descartePorLead.get(id);
+          const hastaFinal = descarte ? descarte.timestamp : new Date();
+          return {
+            lead_id: id,
+            etapa_alcanzada: etapaAlcanzada(id),
+            origen: origenPorLead.get(id) ?? null,
+            seguimientos: seguimientosPorLead.get(id) ?? 0,
+            motivo_descarte: descarte?.motivo ?? null,
+            tiempos_horas: calcularTiemposEntreEtapas(cambiosLead, hastaFinal),
+          };
+        });
+        contexto = {
+          alcance: input.alcance,
+          motivo_filtro: input.motivoDescarte ?? null,
+          total: leadIds.length,
+          leads,
+        };
+      }
+
+      const contextoJSON = JSON.stringify(contexto);
+
+      const provider = new GeminiProvider();
+      const respuesta = await provider.completar(
+        PROMPT_SISTEMA_BASE,
+        contextoJSON,
+        "Con base unicamente en el contexto, identifica patrones: en que etapa se caen mas estos leads, y (si el " +
+          "contexto trae leads individuales) que diferencia a los que avanzaron mas de los que no. Si el contexto es " +
+          "agregado (no hay un array 'leads'), respondé sobre las distribuciones que ves.",
+        0.3,
+      );
+
+      const { advertencia } = validarRespuesta(respuesta, contexto);
+
+      return { respuesta, advertencia, modo: leadIds.length > UMBRAL_AGREGACION ? "agregado" : "individual" };
+    }),
 });
