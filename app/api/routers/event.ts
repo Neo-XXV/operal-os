@@ -4,6 +4,15 @@ import { getDb } from "../queries/connection";
 import { leads, eventos, users } from "@db/schema";
 import { eq, desc, and, gte, lte, inArray, count, sql } from "drizzle-orm";
 
+// lead_id es nullable a nivel de columna (unico caso real: ANOMALIA_DETECTADA
+// de nivel SETTER/EQUIPO, ver 03_catalogo_eventos.md evento 14) -- pero todo
+// el resto de los tipos de evento (los que se leen en este archivo) siempre
+// lo llevan. Angosta el tipo una sola vez en el punto de lectura en vez de
+// repetir el chequeo en cada consumidor.
+export function conLeadId<T extends { leadId: number | null }>(rows: T[]): (T & { leadId: number })[] {
+  return rows.filter((r): r is T & { leadId: number } => r.leadId !== null);
+}
+
 // timestamp de MySQL tiene resolucion de 1 segundo — la carga rapida (Enter,
 // Enter, Enter) y los seguimientos en lote (Sprint 2) generan varios eventos
 // en el mismo segundo como flujo normal, no como caso borde. Desempatar SIEMPRE
@@ -135,11 +144,11 @@ export async function obtenerEstadoLlamadaLote(
     db.query.eventos.findMany({
       where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "ESTADO_CAMBIADO")),
       orderBy: [desc(eventos.timestamp), desc(eventos.id)],
-    }),
+    }).then(conLeadId),
     db.query.eventos.findMany({
       where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "LLAMADA_REGISTRADA")),
       orderBy: [desc(eventos.timestamp), desc(eventos.id)],
-    }),
+    }).then(conLeadId),
   ]);
 
   const etapaPorLead = new Map<number, string>();
@@ -192,13 +201,13 @@ export async function obtenerCierreLote(db: ReturnType<typeof getDb>, leadIds: n
   if (leadIds.length === 0) return resultado;
   for (const leadId of leadIds) resultado.set(leadId, CIERRE_VACIO);
 
-  const cierres = await db.query.eventos.findMany({
+  const cierres = conLeadId(await db.query.eventos.findMany({
     where: and(
       inArray(eventos.leadId, leadIds),
       eq(eventos.tipo, "LLAMADA_REGISTRADA"),
       sql`${eventos.payload}->>'$.cerro' = 'true'`,
     ),
-  });
+  }));
   for (const ev of cierres) {
     const payload = ev.payload as LlamadaPayload;
     resultado.set(ev.leadId, { cerrado: true, montoCierre: payload.monto_cierre, moneda: payload.moneda, timestamp: ev.timestamp });
@@ -220,9 +229,9 @@ export async function cashCollectedLote(db: ReturnType<typeof getDb>, leadIds: n
   if (leadIds.length === 0) return resultado;
   for (const leadId of leadIds) resultado.set(leadId, 0);
 
-  const pagos = await db.query.eventos.findMany({
+  const pagos = conLeadId(await db.query.eventos.findMany({
     where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "PAGO_REGISTRADO")),
-  });
+  }));
   for (const ev of pagos) {
     const monto = (ev.payload as { monto: number }).monto;
     resultado.set(ev.leadId, (resultado.get(ev.leadId) ?? 0) + monto);
@@ -426,11 +435,13 @@ function resolverBucketsCalendario(granularidad: GranularidadHistorico, cantidad
 // Un lead sin ninguna asignacion queda excluido de toda atribucion (mismo
 // criterio que setterActual: null en el resto del codigo). El resultado se
 // le pasa a calcularEmbudo sin cambios, mismo patron que dashboardEjecutivo
-// y dashboardHistorico.
-function construirAsignacionPorSetter(
-  cambiosEstado: { leadId: number; timestamp: Date; payload: unknown }[],
+// y dashboardHistorico. timestamp/id se preservan en la salida (ademas de
+// leadId/payload) para consumidores que necesitan orden cronologico exacto
+// -- ver detectarTransicionConversion en anomalia.ts.
+export function construirAsignacionPorSetter(
+  cambiosEstado: { id: number; leadId: number; timestamp: Date; payload: unknown }[],
   asignaciones: { id: number; leadId: number; timestamp: Date; payload: unknown }[],
-): Map<number, { leadId: number; payload: unknown }[]> {
+): Map<number, { leadId: number; timestamp: Date; id: number; payload: unknown }[]> {
   const asignacionesPorLead = new Map<number, { setterId: number; desde: Date; id: number }[]>();
   for (const ev of asignaciones) {
     const setterId = (ev.payload as { setter_nuevo: number }).setter_nuevo;
@@ -446,7 +457,7 @@ function construirAsignacionPorSetter(
     lista.sort((a, b) => a.desde.getTime() - b.desde.getTime() || a.id - b.id);
   }
 
-  const resultado = new Map<number, { leadId: number; payload: unknown }[]>();
+  const resultado = new Map<number, { leadId: number; timestamp: Date; id: number; payload: unknown }[]>();
   for (const ev of cambiosEstado) {
     const intervalos = asignacionesPorLead.get(ev.leadId);
     if (!intervalos) continue;
@@ -461,7 +472,7 @@ function construirAsignacionPorSetter(
     }
     if (dueno === null) continue;
 
-    const entrada = { leadId: ev.leadId, payload: ev.payload };
+    const entrada = { leadId: ev.leadId, timestamp: ev.timestamp, id: ev.id, payload: ev.payload };
     const lista = resultado.get(dueno);
     if (lista) lista.push(entrada);
     else resultado.set(dueno, [entrada]);
@@ -754,6 +765,10 @@ export const eventRouter = createRouter({
 
         const eventosFiltrados = [];
         for (const ev of allEvents) {
+          // ANOMALIA_DETECTADA de nivel SETTER/EQUIPO no tiene lead_id -- un
+          // SETTER nunca deberia ver estos (son operativos, no de un lead
+          // suyo), se excluyen de su vista filtrada.
+          if (ev.leadId === null) continue;
           const setterActual = await obtenerSetterActual(db, ev.leadId);
           if (setterActual === ctx.user.id) {
             if (!input?.tipo || ev.tipo === input.tipo) {
@@ -797,9 +812,9 @@ export const eventRouter = createRouter({
   embudo: adminQuery.query(async () => {
     const db = getDb();
 
-    const cambiosEstado = await db.query.eventos.findMany({
+    const cambiosEstado = conLeadId(await db.query.eventos.findMany({
       where: eq(eventos.tipo, "ESTADO_CAMBIADO"),
-    });
+    }));
 
     return calcularEmbudo(cambiosEstado);
   }),
@@ -827,9 +842,9 @@ export const eventRouter = createRouter({
         condiciones.push(gte(eventos.timestamp, ventana.desdeAnterior));
       }
 
-      const todosLosEventos = await db.query.eventos.findMany({
+      const todosLosEventos = conLeadId(await db.query.eventos.findMany({
         where: and(...condiciones),
-      });
+      }));
 
       const dentroDe = (ev: (typeof todosLosEventos)[number], desde: Date | null, hasta: Date) =>
         (!desde || ev.timestamp >= desde) && ev.timestamp <= hasta;
@@ -918,7 +933,7 @@ export const eventRouter = createRouter({
             gte(eventos.timestamp, desdeGlobal),
             lte(eventos.timestamp, hastaGlobal),
           ),
-        }),
+        }).then(conLeadId),
         activosAlCorte(db, new Date(desdeGlobal.getTime() - 1)),
       ]);
 
@@ -969,9 +984,9 @@ export const eventRouter = createRouter({
       const condicionesEstado = [eq(eventos.tipo, "ESTADO_CAMBIADO"), lte(eventos.timestamp, ventana.hasta)];
       if (ventana.desde) condicionesEstado.push(gte(eventos.timestamp, ventana.desde));
 
-      const cambiosEstado = await db.query.eventos.findMany({
+      const cambiosEstado = conLeadId(await db.query.eventos.findMany({
         where: and(...condicionesEstado),
-      });
+      }));
 
       const leadIdsEnPeriodo = [...new Set(cambiosEstado.map((e) => e.leadId))];
 
@@ -982,7 +997,7 @@ export const eventRouter = createRouter({
         leadIdsEnPeriodo.length > 0
           ? db.query.eventos.findMany({
               where: and(eq(eventos.tipo, "LEAD_ASIGNADO"), inArray(eventos.leadId, leadIdsEnPeriodo)),
-            })
+            }).then(conLeadId)
           : Promise.resolve([]),
         db.query.users.findMany({
           where: eq(users.rol, "SETTER"),
@@ -1023,20 +1038,21 @@ export const eventRouter = createRouter({
       const condicionesEstado = [eq(eventos.tipo, "ESTADO_CAMBIADO"), lte(eventos.timestamp, ventana.hasta)];
       if (ventana.desde) condicionesEstado.push(gte(eventos.timestamp, ventana.desde));
 
-      const cambiosEstado = await db.query.eventos.findMany({
+      const cambiosEstado = conLeadId(await db.query.eventos.findMany({
         where: and(...condicionesEstado),
-      });
+      }));
 
       const leadIdsEnPeriodo = [...new Set(cambiosEstado.map((e) => e.leadId))];
 
       // LEAD_CREADO se trae SIN acotar por fecha (el lead puede haberse
       // creado mucho antes del periodo y tener actividad recien ahora).
-      const creaciones =
+      const creaciones = conLeadId(
         leadIdsEnPeriodo.length > 0
           ? await db.query.eventos.findMany({
               where: and(eq(eventos.tipo, "LEAD_CREADO"), inArray(eventos.leadId, leadIdsEnPeriodo)),
             })
-          : [];
+          : [],
+      );
 
       const eventosPorOrigen = construirEventosPorOrigen(cambiosEstado, creaciones);
 
@@ -1083,10 +1099,10 @@ export const eventRouter = createRouter({
   leadsParaLlamar: adminQuery.query(async () => {
     const db = getDb();
 
-    const cambios = await db.query.eventos.findMany({
+    const cambios = conLeadId(await db.query.eventos.findMany({
       where: eq(eventos.tipo, "ESTADO_CAMBIADO"),
       orderBy: [desc(eventos.timestamp), desc(eventos.id)],
-    });
+    }));
     const etapaPorLead = new Map<number, string>();
     for (const ev of cambios) {
       if (!etapaPorLead.has(ev.leadId)) {
@@ -1111,14 +1127,14 @@ export const eventRouter = createRouter({
       db.query.eventos.findMany({
         where: and(inArray(eventos.leadId, leadIdsActivos), eq(eventos.tipo, "LLAMADA_REGISTRADA")),
         orderBy: [desc(eventos.timestamp), desc(eventos.id)],
-      }),
+      }).then(conLeadId),
       db.query.eventos.findMany({
         where: and(inArray(eventos.leadId, leadIdsActivos), eq(eventos.tipo, "LEAD_ASIGNADO")),
         orderBy: [desc(eventos.timestamp), desc(eventos.id)],
-      }),
+      }).then(conLeadId),
       db.query.eventos.findMany({
         where: and(inArray(eventos.leadId, leadIdsActivos), eq(eventos.tipo, "LEAD_CREADO")),
-      }),
+      }).then(conLeadId),
       db.query.leads.findMany({ where: inArray(leads.id, leadIdsActivos) }),
     ]);
 
@@ -1200,10 +1216,10 @@ export const eventRouter = createRouter({
       // podria dejar afuera la version vigente o dejar adentro una ya
       // superada. Se deduplica primero (mismo criterio que event.create),
       // se filtra por fecha despues. Volumen chico (maximo 3 por lead en D).
-      const todasLasLlamadas = await db.query.eventos.findMany({
+      const todasLasLlamadas = conLeadId(await db.query.eventos.findMany({
         where: eq(eventos.tipo, "LLAMADA_REGISTRADA"),
         orderBy: [desc(eventos.timestamp), desc(eventos.id)],
-      });
+      }));
       const llamadasPorLead = new Map<number, EventoLlamada[]>();
       for (const ev of todasLasLlamadas) {
         const lista = llamadasPorLead.get(ev.leadId);

@@ -6,6 +6,7 @@ import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 import { registerGoogleAuthRoutes } from "./lib/googleAuth";
+import { iniciarSchedulerAnomalias } from "./lib/anomaliaScheduler";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -19,6 +20,7 @@ app.use("/api/trpc/*", async (c) => {
   });
 });
 registerGoogleAuthRoutes(app);
+iniciarSchedulerAnomalias();
 app.all("/api/*", (c) => c.json({ error: "Not Found" }, 404));
 
 export default app;

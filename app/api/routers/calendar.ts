@@ -3,7 +3,7 @@ import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { googleCalendarConnections, eventos, leads } from "@db/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
-import { verificarLeadActivo, obtenerEstadoActual, obtenerSetterActual } from "./event";
+import { verificarLeadActivo, obtenerEstadoActual, obtenerSetterActual, conLeadId } from "./event";
 import { GoogleCalendarService } from "../lib/googleCalendarService";
 
 const TIPOS_CALENDAR = [
@@ -26,7 +26,7 @@ type CalendarEventoPayload = {
 // "Evento vigente" es el mas reciente de los 3 tipos para ese lead, mismo
 // patron "ultimo evento gana" que obtenerEstadoActual. Ver
 // docs/03_catalogo_eventos.md eventos 11-13.
-async function obtenerCalendarVigente(db: ReturnType<typeof getDb>, leadId: number) {
+export async function obtenerCalendarVigente(db: ReturnType<typeof getDb>, leadId: number) {
   return db.query.eventos.findFirst({
     where: and(eq(eventos.leadId, leadId), inArray(eventos.tipo, TIPOS_CALENDAR)),
     orderBy: [desc(eventos.timestamp), desc(eventos.id)],
@@ -285,11 +285,11 @@ export const calendarRouter = createRouter({
       // Volumen chico (a lo sumo un vigente por lead) -- se trae todo el
       // universo de eventos de calendario y se agrupa en memoria, mismo
       // criterio ya usado en dashboardLlamadas/listarEventos.
-      const todos = await db.query.eventos.findMany({
+      const todos = conLeadId(await db.query.eventos.findMany({
         where: inArray(eventos.tipo, TIPOS_CALENDAR),
         orderBy: [desc(eventos.timestamp), desc(eventos.id)],
         with: { lead: true },
-      });
+      }));
 
       const vigentePorLead = new Map<number, (typeof todos)[number]>();
       const creacionPorLead = new Map<number, { titulo?: string }>();
@@ -350,10 +350,10 @@ export const calendarRouter = createRouter({
       // Cruce contra los CALENDAR_EVENTO_CREADO del sistema para marcar
       // cuales son leads de OPERAL vs eventos externos -- volumen chico (a
       // lo sumo un vigente por lead), una sola query, sin N+1.
-      const creados = await db.query.eventos.findMany({
+      const creados = conLeadId(await db.query.eventos.findMany({
         where: eq(eventos.tipo, "CALENDAR_EVENTO_CREADO"),
         with: { lead: true },
-      });
+      }));
       const porGoogleEventId = new Map<string, { leadId: number; leadNombre: string }>();
       for (const ev of creados) {
         const googleEventId = (ev.payload as CalendarEventoPayload).google_event_id;

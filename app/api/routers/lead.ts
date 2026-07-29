@@ -3,6 +3,7 @@ import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { leads, eventos } from "@db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
+import { conLeadId } from "./event";
 
 export const leadRouter = createRouter({
   // El setter carga el lead cuando decide contactarlo: LEAD_CREADO, la
@@ -212,10 +213,10 @@ async function obtenerProyeccionesLote(
   // seguimientos en lote generan varios eventos en el mismo segundo como
   // flujo normal. Desempatar por id (orden real de insercion) o "el ultimo
   // evento" no es deterministico.
-  const todosLosEventos = await db.query.eventos.findMany({
+  const todosLosEventos = conLeadId(await db.query.eventos.findMany({
     where: inArray(eventos.leadId, leadIds),
     orderBy: [desc(eventos.timestamp), desc(eventos.id)],
-  });
+  }));
 
   const porLead = new Map<number, typeof todosLosEventos>();
   for (const ev of todosLosEventos) {
