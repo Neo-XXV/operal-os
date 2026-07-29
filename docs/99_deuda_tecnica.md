@@ -78,3 +78,19 @@ Decisión:
 
 Estado:
 Pendiente.
+
+## IA
+
+### `top3AccionesDelDia` no re-verifica en vivo si una anomalía de conversión sigue vigente
+
+Origen:
+- Implementación de `ia.top3AccionesDelDia` (`docs/10_arquitectura_ia.md` sección 8, #2).
+
+Impacto:
+- Las anomalías de tiempo sí se re-chequean contra el estado actual del lead (¿sigue en la misma etapa? ¿no fue descartado?). Las de conversión (`MSR_BAJO`/`PRR_BAJO`/`CSR_BAJO`) no: se usa el último evento `ANOMALIA_DETECTADA` registrado por `(tipo_anomalia, setter_id/EQUIPO)` tal cual, sin recalcular la tasa actual. Si un setter mejoró su conversión después de la última detección pero todavía no se disparó una nueva corrida del motor de reglas que lo confirme, el top-3 puede seguir mencionando una anomalía que ya no es cierta.
+
+Decisión:
+- Aceptada para V1 ("prototipo liviano", `docs/10_arquitectura_ia.md` sección 1). Recalcular en vivo requeriría reprocesar el historial completo de conversión (mismo algoritmo de `detectarTransicionConversion`) en cada consulta de IA — no vale la pena la complejidad hasta que el patrón de uso de esta funcionalidad esté validado.
+
+Estado:
+Pendiente.

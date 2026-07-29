@@ -6,20 +6,32 @@
 // numeros chicos usados como enumeracion ("las 3 acciones..."), por eso
 // nunca bloquea -- solo advierte, el admin sigue viendo la respuesta.
 
-function valoresNumericosDe(contexto: Record<string, unknown>): Set<string> {
-  const valores = new Set<string>();
-  for (const valor of Object.values(contexto)) {
-    if (typeof valor !== "number") continue;
-    valores.add(String(valor));
-    valores.add(Math.round(valor).toString());
+// Recursivo: los contextos reales no son planos (kpis_mes_actual.MSR.actual,
+// anomalias_tiempo_activas[].horas_transcurridas, etc.) -- un escaneo de un
+// solo nivel no encuentra nada de eso. Ver 99_deuda_tecnica.md si esto se
+// vuelve a romper: se detecto tarde porque la primera verificacion real
+// (resumen de objeciones con 0 datos) no citaba ningun numero real.
+function valoresNumericosDe(valor: unknown, acumulador: Set<string> = new Set()): Set<string> {
+  if (typeof valor === "number") {
+    acumulador.add(String(valor));
+    acumulador.add(Math.round(valor).toString());
     // Las tasas (0-1) se citan en la respuesta como porcentaje, no como
     // fraccion -- se acepta tanto la forma redondeada como con un decimal.
     if (valor >= 0 && valor <= 1) {
-      valores.add(Math.round(valor * 100).toString());
-      valores.add((valor * 100).toFixed(1));
+      acumulador.add(Math.round(valor * 100).toString());
+      acumulador.add((valor * 100).toFixed(1));
     }
+    return acumulador;
   }
-  return valores;
+  if (Array.isArray(valor)) {
+    for (const item of valor) valoresNumericosDe(item, acumulador);
+    return acumulador;
+  }
+  if (valor && typeof valor === "object") {
+    for (const v of Object.values(valor)) valoresNumericosDe(v, acumulador);
+    return acumulador;
+  }
+  return acumulador;
 }
 
 const REGEX_NUMERO = /\d+(?:[.,]\d+)?/g;

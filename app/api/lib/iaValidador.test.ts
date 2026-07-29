@@ -35,4 +35,16 @@ describe("validarRespuesta", () => {
     expect(r.advertencia).not.toBeNull();
     expect(r.advertencia).toContain("87");
   });
+
+  it("encuentra numeros anidados (objetos y arrays dentro del contexto)", () => {
+    const contextoAnidado = {
+      kpis_mes_actual: { MSR: { actual: 0.28, umbral_anomalia: 0.25 } },
+      anomalias_tiempo_activas: [{ lead_id: 1653, horas_transcurridas: 80.5 }],
+    };
+    const r = validarRespuesta(
+      "El MSR esta en 28%, cerca del umbral de 25%. El lead 1653 lleva 80.5 horas.",
+      contextoAnidado,
+    );
+    expect(r.advertencia).toBeNull();
+  });
 });
