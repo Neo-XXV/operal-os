@@ -1,11 +1,19 @@
 import { useState } from "react";
-import { Navigate } from "react-router";
+import { Navigate, useNavigate } from "react-router";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PeriodoSelector } from "@/components/PeriodoSelector";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   ChartContainer,
   ChartTooltip,
@@ -218,6 +226,15 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="-m-6 p-6 min-h-[calc(100vh-1px)] bg-background text-foreground space-y-6">
+        <Tabs defaultValue="general">
+          <TabsList>
+            <TabsTrigger value="general">General</TabsTrigger>
+            <TabsTrigger value="por-setter">Por setter</TabsTrigger>
+          </TabsList>
+          <TabsContent value="por-setter" className="mt-4">
+            <PorSetterTab />
+          </TabsContent>
+          <TabsContent value="general" className="mt-4 space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
@@ -643,7 +660,44 @@ export default function Dashboard() {
             </CardContent>
           </Card>
         )}
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
+  );
+}
+
+// Selector de setter para el admin -- al elegir uno, navega a su dashboard
+// individual (ruta propia, /dashboard/setter/:id) en vez de reemplazar este
+// contenido -- misma pagina que usa el setter para ver el suyo (ver
+// DashboardSetter.tsx).
+function PorSetterTab() {
+  const navigate = useNavigate();
+  const { data: setters } = trpc.user.setters.useQuery();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-foreground">Dashboard por setter</CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Elegí un setter para ver su embudo, su CRM y sus anomalías detectadas
+        </p>
+      </CardHeader>
+      <CardContent>
+        <Select onValueChange={(id) => navigate(`/dashboard/setter/${id}`)}>
+          <SelectTrigger className="w-full sm:w-72">
+            <SelectValue placeholder="Seleccionar setter" />
+          </SelectTrigger>
+          <SelectContent>
+            {(setters ?? []).map((s) => (
+              <SelectItem key={s.id} value={String(s.id)}>
+                {s.nombre}
+                {!s.activo && " (inactivo)"}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </CardContent>
+    </Card>
   );
 }

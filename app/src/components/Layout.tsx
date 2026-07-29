@@ -35,6 +35,10 @@ export function Layout({ children }: { children: React.ReactNode }) {
     // Sprint 2: para el setter, la tabla de leads reemplaza al Dashboard —
     // no tiene sentido dejar un link que solo rebota para otro lado.
     ...(isSetter ? [] : [{ href: "/", label: "Dashboard", icon: Home }]),
+    // Dashboards individuales: el setter ve el suyo (02_reglas_de_negocio.md
+    // seccion 10) -- la landing sigue siendo /leads, esto es un link nuevo,
+    // no un reemplazo.
+    ...(isSetter && user ? [{ href: `/dashboard/setter/${user.id}`, label: "Mi Dashboard", icon: Home }] : []),
     ...(isAdmin ? [{ href: "/usuarios", label: "Usuarios", icon: Users }] : []),
     { href: "/leads", label: "Leads", icon: UserPlus },
     // Sprint 4: fase de llamada -- solo ADMIN, el setter no participa de

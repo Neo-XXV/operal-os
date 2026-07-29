@@ -1,6 +1,7 @@
 import { Routes, Route } from 'react-router'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
+import DashboardSetter from './pages/DashboardSetter'
 import Usuarios from './pages/Usuarios'
 import Leads from './pages/Leads'
 import LeadDetail from './pages/LeadDetail'
@@ -13,6 +14,7 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Dashboard />} />
+      <Route path="/dashboard/setter/:id" element={<DashboardSetter />} />
       <Route path="/usuarios" element={<Usuarios />} />
       <Route path="/leads" element={<Leads />} />
       <Route path="/leads/:id" element={<LeadDetail />} />
