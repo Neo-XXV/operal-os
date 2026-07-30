@@ -42,6 +42,38 @@ async function obtenerCalendarCreacion(db: ReturnType<typeof getDb>, leadId: num
   });
 }
 
+// Scoping por rol para las vistas de agenda -- hallazgo A-2
+// (docs/11_auditoria_seguridad.md). Un SETTER ve estrictamente los eventos
+// de calendario de SUS leads: ni nombres, ni horarios, ni slots ocupados
+// anonimizados de leads ajenos (criterio confirmado con el dueño del
+// producto). El ADMIN/MANAGER ve todos. Mismo patron que embudoPorSetter
+// y que el filtro de TIPOS_SOLO_ADMIN en event.ts: la barrera es el rol
+// del contexto, nunca lo que mande el cliente.
+async function leadIdsVisiblesPara(
+  db: ReturnType<typeof getDb>,
+  ctx: { user: { rol: string; id: number } },
+  leadIds: number[],
+): Promise<Set<number>> {
+  if (ctx.user.rol !== "SETTER" || leadIds.length === 0) return new Set(leadIds);
+
+  const asignaciones = await db.query.eventos.findMany({
+    where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "LEAD_ASIGNADO")),
+    orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+  });
+
+  // "Setter actual" = ultimo LEAD_ASIGNADO por lead (mismo criterio que
+  // obtenerSetterActual, pero en lote para no hacer N+1).
+  const setterPorLead = new Map<number, number>();
+  for (const ev of asignaciones) {
+    const leadId = ev.leadId as number;
+    if (!setterPorLead.has(leadId)) {
+      setterPorLead.set(leadId, (ev.payload as { setter_nuevo: number }).setter_nuevo);
+    }
+  }
+
+  return new Set(leadIds.filter((id) => setterPorLead.get(id) === ctx.user.id));
+}
+
 async function verificarPermisoLead(db: ReturnType<typeof getDb>, leadId: number, ctx: { user: { rol: string; id: number } }) {
   if (ctx.user.rol === "SETTER") {
     const setterActual = await obtenerSetterActual(db, leadId);
@@ -279,7 +311,7 @@ export const calendarRouter = createRouter({
   // (docs/02_reglas_de_negocio (1).md seccion 8).
   listarEventosLocales: authedQuery
     .input(z.object({ desde: z.string(), hasta: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = getDb();
 
       // Volumen chico (a lo sumo un vigente por lead) -- se trae todo el
@@ -304,11 +336,14 @@ export const calendarRouter = createRouter({
       // la agenda -- mismo criterio que leadsParaLlamar (Sprint 4), que
       // tampoco muestra leads descartados en sus listas operativas.
       const leadIds = [...vigentePorLead.keys()];
-      const descartes = leadIds.length
-        ? await db.query.eventos.findMany({
-            where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "LEAD_DESCARTADO")),
-          })
-        : [];
+      const [descartes, visibles] = await Promise.all([
+        leadIds.length
+          ? db.query.eventos.findMany({
+              where: and(inArray(eventos.leadId, leadIds), eq(eventos.tipo, "LEAD_DESCARTADO")),
+            })
+          : Promise.resolve([]),
+        leadIdsVisiblesPara(db, ctx, leadIds),
+      ]);
       const leadsDescartados = new Set(descartes.map((d) => d.leadId));
 
       const resultado: {
@@ -321,6 +356,7 @@ export const calendarRouter = createRouter({
       }[] = [];
       for (const ev of vigentePorLead.values()) {
         if (!ev.lead || leadsDescartados.has(ev.leadId)) continue;
+        if (!visibles.has(ev.leadId)) continue;
         const payload = ev.payload as CalendarEventoPayload;
         if (payload.fecha_hora_inicio < input.desde || payload.fecha_hora_inicio > input.hasta) continue;
         resultado.push({
@@ -337,7 +373,7 @@ export const calendarRouter = createRouter({
 
   listarEventos: authedQuery
     .input(z.object({ desde: z.string(), hasta: z.string() }))
-    .query(async ({ input }) => {
+    .query(async ({ ctx, input }) => {
       const db = getDb();
       const service = await GoogleCalendarService.forConnection(db);
       if (!service) return { conectado: false as const, eventos: [] };
@@ -360,17 +396,29 @@ export const calendarRouter = createRouter({
         if (googleEventId && ev.lead) porGoogleEventId.set(googleEventId, { leadId: ev.leadId, leadNombre: ev.lead.nombre });
       }
 
-      return {
-        conectado: true as const,
-        eventos: googleEventos.map((ev) => {
-          const vinculo = porGoogleEventId.get(ev.id);
-          return {
-            ...ev,
-            esOperalLead: !!vinculo,
-            leadId: vinculo?.leadId ?? null,
-            leadNombre: vinculo?.leadNombre ?? null,
-          };
-        }),
-      };
+      const visibles = await leadIdsVisiblesPara(db, ctx, [...new Set([...porGoogleEventId.values()].map((v) => v.leadId))]);
+
+      const enriquecidos = googleEventos.map((ev) => {
+        const vinculo = porGoogleEventId.get(ev.id);
+        return {
+          ...ev,
+          esOperalLead: !!vinculo,
+          leadId: vinculo?.leadId ?? null,
+          leadNombre: vinculo?.leadNombre ?? null,
+        };
+      });
+
+      // El calendario de Google es compartido por la agencia: trae tanto
+      // eventos de leads de OPERAL como eventos externos ajenos al sistema.
+      // Para un SETTER se deja UNICAMENTE lo vinculado a sus propios leads
+      // -- los de otros setters filtran datos ajenos (A-2), y los externos
+      // no son "sus eventos de calendario" bajo el criterio estricto
+      // acordado. El ADMIN sigue viendo el calendario completo.
+      const eventosVisibles =
+        ctx.user.rol === "SETTER"
+          ? enriquecidos.filter((ev) => ev.leadId !== null && visibles.has(ev.leadId))
+          : enriquecidos;
+
+      return { conectado: true as const, eventos: eventosVisibles };
     }),
 });
