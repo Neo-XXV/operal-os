@@ -2,7 +2,18 @@ import { z } from "zod";
 import { createRouter, authedQuery, adminQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { leads, eventos, users } from "@db/schema";
-import { eq, desc, and, gte, lte, inArray, count, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, inArray, notInArray, count, sql } from "drizzle-orm";
+
+// Tipos de evento de la fase de llamada -- visibles UNICAMENTE para ADMIN
+// (docs/02_reglas_de_negocio (1).md seccion 7: "Los datos de la fase de
+// llamada (montos, cash collected, grabaciones, notas de la call) son
+// visibles unicamente para ADMIN. El SETTER no tiene acceso a esta
+// informacion en la V1"). Los endpoints agregados de la fase de llamada ya
+// son adminQuery; esta constante cubre los que devuelven eventos crudos de
+// un lead, donde el chequeo de ownership pasa pero igual hay que filtrar
+// por tipo (hallazgo A-1, docs/11_auditoria_seguridad.md). Una sola lista
+// compartida a proposito: dos listas separadas divergen con el tiempo.
+export const TIPOS_SOLO_ADMIN = ["LLAMADA_REGISTRADA", "PAGO_REGISTRADO"] as const;
 
 // lead_id es nullable a nivel de columna (unico caso real: ANOMALIA_DETECTADA
 // de nivel SETTER/EQUIPO, ver 03_catalogo_eventos.md evento 14) -- pero todo
@@ -738,8 +749,17 @@ export const eventRouter = createRouter({
         }
       }
 
+      // El chequeo de ownership de arriba no alcanza: un lead PROPIO del
+      // setter puede tener eventos de la fase de llamada, que son
+      // solo-ADMIN (ver TIPOS_SOLO_ADMIN). Se filtra en SQL, no en memoria
+      // -- el dato no sale de la base si no corresponde.
+      const condiciones = [eq(eventos.leadId, input.leadId)];
+      if (ctx.user.rol === "SETTER") {
+        condiciones.push(notInArray(eventos.tipo, [...TIPOS_SOLO_ADMIN]));
+      }
+
       return db.query.eventos.findMany({
-        where: eq(eventos.leadId, input.leadId),
+        where: and(...condiciones),
         orderBy: [desc(eventos.timestamp), desc(eventos.id)],
         with: { actor: true },
       });
@@ -758,7 +778,11 @@ export const eventRouter = createRouter({
       const db = getDb();
 
       if (ctx.user.rol === "SETTER") {
+        // Excluye en SQL los tipos de la fase de llamada (solo-ADMIN, ver
+        // TIPOS_SOLO_ADMIN) -- el filtro de ownership de abajo no los
+        // cubre, porque son eventos de leads que SI son del setter.
         const allEvents = await db.query.eventos.findMany({
+          where: notInArray(eventos.tipo, [...TIPOS_SOLO_ADMIN]),
           orderBy: [desc(eventos.timestamp), desc(eventos.id)],
           with: { lead: true, actor: true },
         });
