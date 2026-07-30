@@ -8,8 +8,12 @@ services:
       MYSQL_USER: operal
       MYSQL_PASSWORD: operal_dev_pw
       MYSQL_ROOT_PASSWORD: root_dev_pw
+    # Bind SOLO a loopback: "3306:3306" publica en 0.0.0.0 y deja la base
+    # alcanzable desde cualquier dispositivo de la misma red con las
+    # credenciales de arriba (hallazgo M-1, docs/11_auditoria_seguridad.md).
+    # El backend corre en este mismo host, asi que localhost le alcanza.
     ports:
-      - "3306:3306"
+      - "127.0.0.1:3306:3306"
     volumes:
       - mysql_data:/var/lib/mysql
 
