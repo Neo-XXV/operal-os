@@ -1,5 +1,7 @@
 import { useState } from "react";
+import { Navigate } from "react-router";
 import { Layout } from "@/components/Layout";
+import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,12 +20,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
+import { GlassPanel as Card, GlassPanelContent as CardContent } from "@/components/GlassPanel";
 import { Plus, UserCheck, UserX } from "lucide-react";
 
 export default function Usuarios() {
+  const { isAdmin, isLoading: authLoading } = useAuth();
   const utils = trpc.useUtils();
-  const { data: users, isLoading } = trpc.user.list.useQuery();
+  // enabled: isAdmin -- sin esto un SETTER que tipea la URL dispara igual la
+  // query y come un error del backend antes de que el guard lo redirija.
+  const { data: users, isLoading } = trpc.user.list.useQuery(undefined, { enabled: isAdmin });
   const [open, setOpen] = useState(false);
   const [nombre, setNombre] = useState("");
   const [email, setEmail] = useState("");
@@ -57,6 +62,14 @@ export default function Usuarios() {
     }
     createUser.mutate({ nombre, email, password, rol: rol as "SETTER" | "MANAGER" | "ADMIN" });
   };
+
+  // Guard de ruta -- va DESPUES de todos los hooks (no se pueden llamar
+  // condicionalmente). Cierra la deuda B-6 de docs/11_auditoria_seguridad.md
+  // con el mismo patron inline de Llamadas.tsx e Inteligencia.tsx. No es la
+  // barrera real: todo userRouter ya es adminQuery en el backend -- esto
+  // evita renderizar una pantalla que el rol no deberia ni ver.
+  if (authLoading) return null;
+  if (!isAdmin) return <Navigate to="/leads" replace />;
 
   return (
     <Layout>

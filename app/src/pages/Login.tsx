@@ -3,7 +3,12 @@ import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  GlassPanel,
+  GlassPanelContent as CardContent,
+  GlassPanelHeader as CardHeader,
+  GlassPanelTitle as CardTitle,
+} from "@/components/GlassPanel";
 import { Activity } from "lucide-react";
 
 export default function Login() {
@@ -36,8 +41,11 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <Card className="w-full max-w-sm">
+    // Sin bg-background propio: el fondo plano ya lo pone el body, igual que
+    // en el resto de la app. La tarjeta usa la variante elevada por ser el
+    // unico elemento de la pantalla.
+    <div className="flex min-h-screen items-center justify-center px-4">
+      <GlassPanel raised className="w-full max-w-sm">
         <CardHeader className="text-center">
           <div className="flex justify-center mb-2">
             <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
@@ -56,7 +64,8 @@ export default function Login() {
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="admin@operal.com"
+                autoComplete="username"
+                placeholder="tu@email.com"
               />
             </div>
             <div className="space-y-2">
@@ -66,7 +75,7 @@ export default function Login() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="admin123"
+                autoComplete="current-password"
               />
             </div>
             {error && (
@@ -83,7 +92,7 @@ export default function Login() {
             </Button>
           </form>
         </CardContent>
-      </Card>
+      </GlassPanel>
     </div>
   );
 }
