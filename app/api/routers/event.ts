@@ -47,6 +47,34 @@ export async function obtenerSetterActual(db: ReturnType<typeof getDb>, leadId: 
     : null;
 }
 
+// Version en LOTE de obtenerSetterActual: devuelve los lead_id cuyo setter
+// actual es `setterId`. Misma proyeccion (ultimo LEAD_ASIGNADO por lead,
+// desempatado por id), una sola query.
+//
+// Existe porque llamar a obtenerSetterActual dentro de un loop es N+1: en la
+// base real son ~1.600 leads y ~11.000 eventos, y esa forma tardaba 14s por
+// request contra 23ms de la version acotada en SQL. En un proceso unico eso
+// es un DoS auto-infligido, no solo lentitud.
+export async function leadIdsDelSetter(db: ReturnType<typeof getDb>, setterId: number): Promise<number[]> {
+  const asignaciones = conLeadId(await db.query.eventos.findMany({
+    where: eq(eventos.tipo, "LEAD_ASIGNADO"),
+    orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+  }));
+
+  const setterPorLead = new Map<number, number>();
+  for (const ev of asignaciones) {
+    if (!setterPorLead.has(ev.leadId)) {
+      setterPorLead.set(ev.leadId, (ev.payload as { setter_nuevo: number }).setter_nuevo);
+    }
+  }
+
+  const propios: number[] = [];
+  for (const [leadId, setter] of setterPorLead) {
+    if (setter === setterId) propios.push(leadId);
+  }
+  return propios;
+}
+
 const ESTADOS_VALIDOS = ["A", "MS", "B", "C", "D"] as const;
 
 export function validarTransicion(anterior: string | null, nuevo: string) {
@@ -777,39 +805,42 @@ export const eventRouter = createRouter({
     .query(async ({ ctx, input }) => {
       const db = getDb();
 
-      if (ctx.user.rol === "SETTER") {
-        // Excluye en SQL los tipos de la fase de llamada (solo-ADMIN, ver
-        // TIPOS_SOLO_ADMIN) -- el filtro de ownership de abajo no los
-        // cubre, porque son eventos de leads que SI son del setter.
-        const allEvents = await db.query.eventos.findMany({
-          where: notInArray(eventos.tipo, [...TIPOS_SOLO_ADMIN]),
-          orderBy: [desc(eventos.timestamp), desc(eventos.id)],
-          with: { lead: true, actor: true },
-        });
-
-        const eventosFiltrados = [];
-        for (const ev of allEvents) {
-          // ANOMALIA_DETECTADA de nivel SETTER/EQUIPO no tiene lead_id -- un
-          // SETTER nunca deberia ver estos (son operativos, no de un lead
-          // suyo), se excluyen de su vista filtrada.
-          if (ev.leadId === null) continue;
-          const setterActual = await obtenerSetterActual(db, ev.leadId);
-          if (setterActual === ctx.user.id) {
-            if (!input?.tipo || ev.tipo === input.tipo) {
-              if (!input?.leadId || ev.leadId === input.leadId) {
-                eventosFiltrados.push(ev);
-              }
-            }
-          }
-        }
-        const start = input?.offset ?? 0;
-        const end = start + (input?.limit ?? 50);
-        return eventosFiltrados.slice(start, end);
-      }
-
+      // Filtros opcionales del input, comunes a las dos ramas -- se arman una
+      // sola vez para no repetir el cast del enum de `tipo`.
       const conditions = [];
       if (input?.leadId) conditions.push(eq(eventos.leadId, input.leadId));
       if (input?.tipo) conditions.push(eq(eventos.tipo, input.tipo as any));
+
+      if (ctx.user.rol === "SETTER") {
+        // Se resuelven primero los leads propios (una query en lote) y recien
+        // despues se piden los eventos ACOTADOS a esos leads, con el paginado
+        // en SQL. La forma anterior traia los ~11.000 eventos del sistema y
+        // llamaba a obtenerSetterActual por cada uno (N+1): 14s por request
+        // contra 23ms de la rama de admin, con el proceso bloqueado mientras
+        // tanto. Mismo resultado, dos queries.
+        const misLeads = await leadIdsDelSetter(db, ctx.user.id);
+        // Sin leads asignados no hay nada que ver -- y ademas un inArray
+        // vacio no es SQL valido.
+        if (misLeads.length === 0) return [];
+
+        // ANOMALIA_DETECTADA de nivel SETTER/EQUIPO no tiene lead_id y queda
+        // afuera por construccion: al filtrar por inArray(leadId, misLeads)
+        // las filas con leadId NULL nunca matchean.
+        return db.query.eventos.findMany({
+          where: and(
+            inArray(eventos.leadId, misLeads),
+            // Tipos de la fase de llamada: solo-ADMIN (ver TIPOS_SOLO_ADMIN).
+            // El filtro de ownership no los cubre, porque son eventos de
+            // leads que SI son del setter.
+            notInArray(eventos.tipo, [...TIPOS_SOLO_ADMIN]),
+            ...conditions,
+          ),
+          orderBy: [desc(eventos.timestamp), desc(eventos.id)],
+          limit: input?.limit ?? 50,
+          offset: input?.offset ?? 0,
+          with: { lead: true, actor: true },
+        });
+      }
 
       if (conditions.length > 0) {
         return db.query.eventos.findMany({
