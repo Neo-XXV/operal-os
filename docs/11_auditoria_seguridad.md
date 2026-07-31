@@ -164,7 +164,7 @@ Hoy es BAJA porque el archivo solo existe en la máquina local y el servidor no 
 
 **Remediación propuesta:** generar un secreto aleatorio (`node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`) y, más importante, hacer que la app **se niegue a arrancar en producción** con un secreto conocido/débil. Hoy `required()` (`env.ts:3-9`) solo verifica que la variable exista, no que sea fuerte.
 
-**Ver también S2-A-1** (segunda auditoría, abajo): incluso con un `JWT_SECRET` fuerte, hay un hallazgo nuevo y explotado de confusión entre el token de sesión y el token `state` del OAuth de Google, que no depende de la fuerza del secreto.
+**Ver también S2-A-1** (segunda auditoría, abajo): incluso con un `JWT_SECRET` fuerte, había un hallazgo explotado de confusión entre el token de sesión y el token `state` del OAuth de Google, que no dependía de la fuerza del secreto. Ya corregido (ver el cierre de esa sección).
 
 ---
 
@@ -289,7 +289,7 @@ Dos hallazgos de esta pasada **se probaron contra el sistema real, no solo se le
 
 | # | Hallazgo | Severidad hoy | Severidad en prod |
 |---|---|---|---|
-| S2-A-1 | El JWT `state` del flujo OAuth de Google (10 min, para CSRF) es aceptado como sesión completa por cualquier endpoint — **explotado** | **ALTA** | **ALTA** |
+| S2-A-1 | El JWT `state` del flujo OAuth de Google (10 min, para CSRF) es aceptado como sesión completa por cualquier endpoint — **explotado, CORREGIDO y re-verificado** | ~~ALTA~~ RESUELTO | ~~ALTA~~ RESUELTO |
 | S2-M-1 | Prompt injection vía `OBJECION_REGISTRADA.detalle` — sin delimitador ni instrucción anti-injection; refina y agrega evidencia empírica a M-2 (primera auditoría) | MEDIA | MEDIA |
 | S2-M-2 | Dependencias de producción con CVE ALTA (`react-router`, inaplicable) y MEDIA (`@hono/node-server`, ya cubierta como A-3) — `npm audit` completo, 9 hallazgos | BAJA/N-A | Ver detalle |
 | S2-B-1 | 84/85 dependencias en rango `^` — mitigado por `package-lock.json` committeado, pero el deploy debe forzar `npm ci` explícitamente | BAJA | BAJA-MEDIA |
@@ -300,7 +300,7 @@ Dos hallazgos de esta pasada **se probaron contra el sistema real, no solo se le
 
 ## S2-A-1 — El token `state` del OAuth de Google funciona como sesión completa
 
-**Severidad: ALTA hoy · ALTA en producción. Explotado, no solo teorizado.**
+**Severidad: ALTA hoy · ALTA en producción. Explotado, no solo teorizado. CORREGIDO y re-verificado — ver el cierre al final de esta sección.**
 
 **Ubicación:** `app/api/lib/googleAuth.ts:35` (donde se firma) vs. `app/api/context.ts:43-63` (`resolveUser`, donde se verifica cualquier token de sesión).
 
@@ -340,6 +340,28 @@ Acceso admin completo, con un token que nunca debió servir para eso.
 **Verificado que la dirección inversa SÍ está bien resuelta:** un token de sesión real (sin `purpose`) no puede hacerse pasar por `state` en el callback — `googleAuth.ts:66` exige `purpose === "google_oauth_connect"` explícitamente y rechaza cualquier otro token con `?error=invalid_state`. El agujero es de un solo sentido: state → sesión, no sesión → state.
 
 **Remediación propuesta:** la forma más chica es que `resolveUser()` rechace cualquier token que traiga un claim `purpose` (una sesión real nunca debería tenerlo) — una línea. Más robusto: usar un `audience` (`aud`) distinto al firmar cada tipo de token (`jwt.sign(..., { audience: "session" })` vs `{ audience: "oauth_state" })`) y que cada verificador pase `{ audience: "..." }` esperado a `jwt.verify()` — la librería ya soporta esto nativamente y rechaza el token si no matchea, sin lógica manual.
+
+### Corregido y re-verificado (commit siguiente a esta auditoría)
+
+Se implementó la variante allowlist (más robusta que "rechazar si trae `purpose`", que era una denylist): el token de sesión real ahora se firma con `purpose: "session"` explícito (`auth.ts:37`), y `resolveUser()` (`context.ts`) exige exactamente ese valor — cualquier otro token, tenga o no `purpose`, sea o no el `state` de OAuth, queda afuera por default. El token `state` del OAuth de Google no se tocó: sigue llevando `purpose: "google_oauth_connect"` y su propio verificador en `googleAuth.ts:66` sigue exigiéndolo igual que antes.
+
+**Re-explotado el mismo ataque, antes y después del fix, contra el servidor real:**
+
+Antes (código sin el fix, mismo token `state` reconstruido de la explotación original):
+```
+=== EXPLOTACION: token 'state' de OAuth contra user.list (adminQuery) ===
+HTTP status: 200
+RESULTADO: ACEPTADO -- devolvio 10 usuarios (VULNERABLE)
+```
+
+Después (mismo ataque exacto, código con el fix):
+```
+=== EXPLOTACION: token 'state' de OAuth contra user.list (adminQuery) ===
+HTTP status: 401
+RESULTADO: RECHAZADO -- "No autenticado"
+```
+
+**Confirmado que no se rompió nada:** login real (`auth.login`) sigue devolviendo un token válido; `auth.me` y `user.list` con ese token de sesión real siguen funcionando (200, datos correctos); y el inicio del handshake de OAuth (`GET /api/auth/google` con un token de sesión real) sigue redirigiendo normalmente a `accounts.google.com` con su propio `state` firmado. 43/43 tests, typecheck y lint sin cambios de baseline.
 
 ---
 

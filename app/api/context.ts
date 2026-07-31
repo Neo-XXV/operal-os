@@ -44,7 +44,17 @@ export async function resolveUser(token: string): Promise<UserContext | undefine
   try {
     const decoded = jwt.verify(token, env.jwtSecret) as {
       userId: number;
+      purpose?: string;
     };
+    // Allowlist, no denylist: exige purpose === "session" en vez de rechazar
+    // los purpose conocidos (ej. "google_oauth_connect"). Cualquier JWT que
+    // el sistema firme en el futuro para un uso mas acotado queda afuera de
+    // esta funcion por default, sin depender de que alguien se acuerde de
+    // agregarlo a una lista de exclusion (docs/11_auditoria_seguridad.md,
+    // S2-A-1 -- el token "state" del OAuth de Google, de solo 10 min y
+    // pensado unicamente para el callback, autenticaba requests a toda la
+    // API porque esta funcion nunca revisaba el proposito del token).
+    if (decoded.purpose !== "session") return undefined;
     const db = getDb();
     const row = await db.query.users.findFirst({
       where: eq(users.id, decoded.userId),

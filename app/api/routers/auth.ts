@@ -34,7 +34,15 @@ export const authRouter = createRouter({
         return { success: false, error: "Credenciales invalidas" };
       }
 
-      const token = jwt.sign({ userId: user.id }, env.jwtSecret, {
+      // purpose: "session" -- distingue este token (valido para autenticar
+      // CUALQUIER request a la API) de otros JWT que firma el sistema con el
+      // mismo jwtSecret pero para un uso mas acotado, como el "state" del
+      // handshake de OAuth de Google (googleAuth.ts, purpose:
+      // "google_oauth_connect", 10 min, pensado solo para el callback).
+      // Sin este claim, resolveUser() en context.ts no tenia forma de
+      // distinguir un token de sesion real de esos otros (docs/11_auditoria_
+      // seguridad.md, S2-A-1 -- explotado y corregido).
+      const token = jwt.sign({ userId: user.id, purpose: "session" }, env.jwtSecret, {
         expiresIn: "7d",
       });
 
