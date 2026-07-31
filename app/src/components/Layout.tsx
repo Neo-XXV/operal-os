@@ -57,11 +57,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    <div className="flex h-screen bg-background">
+    // Sin bg-background: el contenedor tiene que ser transparente para que
+    // se vea la malla de gradientes del body, que es lo que el
+    // backdrop-blur de los paneles desenfoca.
+    <div className="flex h-screen">
       {/* Sidebar compacta icon-first (desktop). El label vive en el tooltip,
           no en la barra: la navegacion no compite por ancho con el contenido
           operativo, que es lo que el usuario mira. */}
-      <aside className="hidden md:flex flex-col items-center w-16 shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
+      <aside className="glass hidden md:flex flex-col items-center w-16 shrink-0 text-sidebar-foreground rounded-none border-y-0 border-l-0">
         <Link
           to="/"
           className="mt-4 mb-2 w-10 h-10 rounded-xl bg-brand text-brand-foreground flex items-center justify-center font-semibold text-sm shrink-0"
@@ -131,7 +134,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
       </aside>
 
       {/* Mobile header */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-sidebar text-sidebar-foreground">
+      <div className="glass md:hidden fixed top-0 left-0 right-0 z-50 text-sidebar-foreground rounded-none border-x-0 border-t-0">
         <div className="flex items-center justify-between p-4">
           <h1 className="text-lg font-bold">OPERAL OS</h1>
           <div className="flex items-center gap-1">
@@ -172,8 +175,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
       </div>
 
-      {/* Main content */}
-      <main className="flex-1 overflow-auto pt-16 md:pt-0 bg-background text-foreground">
+      {/* Main content -- transparente, deja pasar la malla del body */}
+      <main className="flex-1 overflow-auto pt-16 md:pt-0 text-foreground">
         <div className="p-6 max-w-7xl mx-auto">{children}</div>
       </main>
     </div>

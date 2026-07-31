@@ -50,7 +50,7 @@ export function Medidor({ label, valor, umbral, objetivo, conteo, descripcion }:
   const pctObjetivo = objetivo != null ? Math.min(100, (objetivo / max) * 100) : null;
 
   return (
-    <div className="rounded-2xl bg-card border border-border shadow-panel p-4">
+    <div className="glass rounded-2xl p-4">
       <div className="flex items-baseline justify-between gap-2">
         <span className="text-xs font-medium text-muted-foreground">{label}</span>
         {/* El valor va SIEMPRE visible, nunca solo en tooltip: tres hues de
@@ -67,7 +67,7 @@ export function Medidor({ label, valor, umbral, objetivo, conteo, descripcion }:
         {/* Marcas de umbral y objetivo: hairline del color de superficie, que
             corta el riel sin sumar tinta de dato. */}
         <span
-          className="absolute inset-y-0 w-0.5 bg-card"
+          className="absolute inset-y-0 w-0.5 bg-[hsl(var(--glass))]"
           style={{ left: `${pctUmbral}%` }}
           aria-hidden="true"
         />

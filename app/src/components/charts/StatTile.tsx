@@ -63,7 +63,7 @@ function Sparkline({ datos }: { datos: number[] }) {
       <path d={d} fill="none" stroke={CHROME.muted} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
       {/* Anillo del color de superficie: separa el punto de la linea sin
           dibujarle un borde de "tinta de dato" alrededor. */}
-      <circle cx={ux} cy={uy} r={6} fill="hsl(var(--card))" />
+      <circle cx={ux} cy={uy} r={6} fill="hsl(var(--glass))" />
       <circle cx={ux} cy={uy} r={4} fill={CAT.blue} />
     </svg>
   );
@@ -72,8 +72,8 @@ function Sparkline({ datos }: { datos: number[] }) {
 export function StatTile({ label, value, invertido, delta, trend, destacada, info }: StatTileProps) {
   return (
     <div
-      className={`rounded-2xl bg-card border border-border flex flex-col justify-between ${
-        destacada ? "p-6 shadow-raised" : "p-5 shadow-panel"
+      className={`rounded-2xl flex flex-col justify-between ${
+        destacada ? "glass-raised p-6" : "glass p-5"
       }`}
     >
       <div className="flex items-start justify-between gap-2">
@@ -132,7 +132,7 @@ export function HeroFigure({
   estado?: "good" | "warning" | "critical";
 }) {
   return (
-    <div className="rounded-2xl bg-card border border-border shadow-raised p-6 flex flex-col justify-between">
+    <div className="glass-raised rounded-2xl p-6 flex flex-col justify-between">
       <span className="text-sm font-medium text-muted-foreground flex items-center">{label}</span>
       <div className="mt-2 flex items-baseline gap-3">
         <span className="text-5xl font-semibold text-foreground">{value}</span>

@@ -4,7 +4,12 @@ import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  GlassPanel as Card,
+  GlassPanelContent as CardContent,
+  GlassPanelHeader as CardHeader,
+  GlassPanelTitle as CardTitle,
+} from "@/components/GlassPanel";
 import { PeriodoSelector } from "@/components/PeriodoSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -203,7 +208,7 @@ export default function Dashboard() {
 
   return (
     <Layout>
-      <div className="-m-6 p-6 min-h-[calc(100vh-1px)] bg-background text-foreground space-y-6">
+      <div className="-m-6 p-6 min-h-[calc(100vh-1px)] text-foreground space-y-6">
         <Tabs defaultValue="general">
           <TabsList>
             <TabsTrigger value="general">General</TabsTrigger>
@@ -247,8 +252,8 @@ export default function Dashboard() {
             {/* Cuello de botella — status de alerta, no una tile decorativa:
                 borde + icono en el color de "warning" fijo, nunca color solo. */}
             <div
-              className="rounded-2xl p-5"
-              style={{ backgroundColor: "hsl(var(--card))", border: `1px solid ${wash(STATUS.warning, 25)}` }}
+              className="glass rounded-2xl p-5"
+              style={{ borderColor: wash(STATUS.warning, 35) }}
             >
               {!cuelloDeBotella || !transicionCuelloDeBotella ? (
                 <p className="text-sm text-muted-foreground">
@@ -365,7 +370,7 @@ export default function Dashboard() {
                   // simple con su delta.
                   if (!umbrales) {
                     return (
-                      <div key={t.key} className="rounded-2xl bg-card border border-border shadow-panel p-4">
+                      <div key={t.key} className="glass rounded-2xl p-4">
                         <span className="text-xs font-medium text-muted-foreground">
                           {t.label} <span className="text-muted-foreground">({t.key})</span>
                         </span>

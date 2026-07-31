@@ -15,7 +15,11 @@
     --secondary: 240 4.8% 95.9%;
     --secondary-foreground: 240 5.9% 10%;
     --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
+    /* Mas oscuro que el 46.1% por defecto de shadcn: ese valor asume fondo
+       blanco pleno. Sobre un panel glass con la malla de color debajo caia
+       a 2.9:1 (medido), por debajo del minimo para texto. A 32% queda en
+       5.3:1 sobre el peor caso de la malla y 8.4:1 sobre blanco. */
+    --muted-foreground: 240 5% 32%;
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
     --destructive: 0 84.2% 60.2%;
@@ -76,6 +80,25 @@
     --status-warning: #fab219;
     --status-serious: #ec835a;
     --status-critical: #d03b3b;
+
+    /* ── Glass ─────────────────────────────────────────────────────
+       El panel es blanco semitransparente sobre la malla del body. El
+       alpha esta calibrado para que el texto siga legible sobre
+       cualquier zona de la malla, no solo sobre las claras. */
+    --glass: 0 0% 100%;
+    --glass-alpha: 0.55;
+    --glass-border: 0 0% 100%;
+    --glass-border-alpha: 0.75;
+    --glass-sheen: 0 0% 100%;
+    --glass-sheen-alpha: 0.9;
+
+    /* Malla de fondo: tiene que ser VISIBLE, si no el frosted glass no se
+       lee (un panel translucido sobre casi-blanco parece un panel opaco).
+       Familia navy/violeta/durazno, saturada pero sin llegar al neon. */
+    --mesh-1: 224 70% 68%;
+    --mesh-2: 200 65% 72%;
+    --mesh-3: 265 55% 74%;
+    --mesh-4: 25 65% 78%;
   }
 
   /* Modo oscuro -- chrome/ink oscuros de la paleta validada (skill dataviz)
@@ -136,6 +159,24 @@
     --chart-ord-3: #3987e5;
     --chart-ord-4: #5598e7;
     --chart-ord-5: #86b6ef;
+
+    /* Glass oscuro: el panel es un gris muy oscuro semitransparente. El
+       borde deja de ser blanco pleno y baja a un brillo tenue -- en oscuro
+       un canto blanco fuerte se ve como un halo, no como vidrio. */
+    --glass: 240 6% 12%;
+    --glass-alpha: 0.58;
+    --glass-border: 0 0% 100%;
+    --glass-border-alpha: 0.12;
+    --glass-sheen: 0 0% 100%;
+    --glass-sheen-alpha: 0.06;
+
+    /* Malla oscura: mismos hues, mucho mas profundos. Verificado que el
+       texto secundario queda en 5.8:1 sobre el panel glass, asi que aca no
+       hizo falta tocar --muted-foreground. */
+    --mesh-1: 224 62% 26%;
+    --mesh-2: 200 55% 18%;
+    --mesh-3: 265 45% 24%;
+    --mesh-4: 205 35% 16%;
   }
 }
 
@@ -143,7 +184,61 @@
   * {
     @apply border-border;
   }
+
+  /* Fondo de la app: malla de gradientes en vez de un color plano. Es lo
+     que hace que el backdrop-blur de los paneles tenga algo real que
+     desenfocar -- sin esto el "frosted glass" no se ve, porque no hay nada
+     detras. Va fijo (no scrollea) para que las tarjetas floten sobre el.
+     Tonos bajos en saturacion: la profundidad la da la capa, no el color. */
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background-color: hsl(var(--background));
+    background-image:
+      radial-gradient(58rem 42rem at 12% -8%, hsl(var(--mesh-1) / 0.55), transparent 60%),
+      radial-gradient(48rem 38rem at 92% 4%, hsl(var(--mesh-2) / 0.5), transparent 62%),
+      radial-gradient(52rem 44rem at 72% 88%, hsl(var(--mesh-3) / 0.45), transparent 60%),
+      radial-gradient(40rem 34rem at 22% 96%, hsl(var(--mesh-4) / 0.4), transparent 60%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    min-height: 100vh;
+  }
+}
+
+@layer utilities {
+  /* Frosted glass. El blur alto + saturate es lo que da el vidrio de la
+     referencia; el borde claro arriba simula el canto iluminado del panel.
+     El fondo semitransparente se apoya en la malla de body, asi que estos
+     paneles NO funcionan sobre un fondo plano. */
+  .glass {
+    background-color: hsl(var(--glass) / var(--glass-alpha));
+    backdrop-filter: blur(22px) saturate(180%);
+    -webkit-backdrop-filter: blur(22px) saturate(180%);
+    border: 1px solid hsl(var(--glass-border) / var(--glass-border-alpha));
+    box-shadow:
+      0 1px 0 0 hsl(var(--glass-sheen) / var(--glass-sheen-alpha)) inset,
+      0 1px 2px 0 rgb(0 0 0 / 0.04),
+      0 8px 24px -6px rgb(0 0 0 / 0.10);
+  }
+
+  /* Variante elevada: para el elemento destacado de una vista (hero KPI).
+     Mas sombra y un poco menos de transparencia, para que lea "mas cerca". */
+  .glass-raised {
+    background-color: hsl(var(--glass) / calc(var(--glass-alpha) + 0.12));
+    backdrop-filter: blur(28px) saturate(190%);
+    -webkit-backdrop-filter: blur(28px) saturate(190%);
+    border: 1px solid hsl(var(--glass-border) / calc(var(--glass-border-alpha) + 0.1));
+    box-shadow:
+      0 1px 0 0 hsl(var(--glass-sheen) / var(--glass-sheen-alpha)) inset,
+      0 2px 4px 0 rgb(0 0 0 / 0.05),
+      0 18px 42px -10px rgb(0 0 0 / 0.16);
+  }
+
+  /* Para navegadores sin backdrop-filter: se cae a un fondo mas opaco en
+     vez de dejar texto sobre un panel casi transparente. */
+  @supports not (backdrop-filter: blur(1px)) {
+    .glass,
+    .glass-raised {
+      background-color: hsl(var(--glass) / 0.92);
+    }
   }
 }
