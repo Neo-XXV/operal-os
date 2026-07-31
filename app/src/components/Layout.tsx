@@ -1,6 +1,7 @@
 import { Link, useLocation, Navigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Users,
   UserPlus,
@@ -57,51 +58,75 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-screen bg-background">
-      {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-64 bg-sidebar text-sidebar-foreground">
-        <div className="p-6 border-b border-sidebar-border">
-          <h1 className="text-xl font-bold tracking-tight">OPERAL OS</h1>
-          <p className="text-xs text-sidebar-foreground/60 mt-1">Sprint 1 — v0.1</p>
-        </div>
+      {/* Sidebar compacta icon-first (desktop). El label vive en el tooltip,
+          no en la barra: la navegacion no compite por ancho con el contenido
+          operativo, que es lo que el usuario mira. */}
+      <aside className="hidden md:flex flex-col items-center w-16 shrink-0 bg-sidebar text-sidebar-foreground border-r border-sidebar-border">
+        <Link
+          to="/"
+          className="mt-4 mb-2 w-10 h-10 rounded-xl bg-brand text-brand-foreground flex items-center justify-center font-semibold text-sm shrink-0"
+          aria-label="OPERAL OS"
+          title="OPERAL OS"
+        >
+          O
+        </Link>
 
-        <nav className="flex-1 p-4 space-y-1">
+        <nav className="flex-1 flex flex-col items-center gap-1 py-2">
           {navItems.map((item) => {
             const active = location.pathname === item.href;
             return (
-              <Link
-                key={item.href}
-                to={item.href}
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                  active
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
-                }`}
-              >
-                <item.icon className="w-4 h-4" />
-                {item.label}
-              </Link>
+              <Tooltip key={item.href}>
+                <TooltipTrigger asChild>
+                  <Link
+                    to={item.href}
+                    aria-label={item.label}
+                    aria-current={active ? "page" : undefined}
+                    // Estado activo: navy solido con texto blanco -- el unico
+                    // uso "fuerte" del acento de marca en toda la interfaz.
+                    className={`flex items-center justify-center w-10 h-10 rounded-xl transition-colors ${
+                      active
+                        ? "bg-brand text-brand-foreground"
+                        : "text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent"
+                    }`}
+                  >
+                    <item.icon className="w-[18px] h-[18px]" />
+                  </Link>
+                </TooltipTrigger>
+                <TooltipContent side="right">{item.label}</TooltipContent>
+              </Tooltip>
             );
           })}
         </nav>
 
-        <div className="p-4 border-t border-sidebar-border">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-8 h-8 rounded-full bg-sidebar-accent flex items-center justify-center text-sm font-semibold">
-              {user.nombre.charAt(0).toUpperCase()}
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium truncate">{user.nombre}</p>
-              <p className="text-xs text-sidebar-foreground/60 capitalize">{user.rol.toLowerCase()}</p>
-            </div>
-            <ThemeToggle className="flex items-center justify-center w-8 h-8 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors flex-shrink-0" />
-          </div>
-          <button
-            onClick={logout}
-            className="flex items-center gap-2 px-3 py-2 mt-2 text-sm text-sidebar-foreground/70 hover:text-sidebar-foreground transition-colors w-full"
-          >
-            <LogOut className="w-4 h-4" />
-            Cerrar sesión
-          </button>
+        <div className="flex flex-col items-center gap-1 py-3 border-t border-sidebar-border w-full">
+          <ThemeToggle className="flex items-center justify-center w-10 h-10 rounded-xl text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors" />
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                onClick={logout}
+                aria-label="Cerrar sesión"
+                className="flex items-center justify-center w-10 h-10 rounded-xl text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent transition-colors"
+              >
+                <LogOut className="w-[18px] h-[18px]" />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="right">Cerrar sesión</TooltipContent>
+          </Tooltip>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className="mt-1 w-8 h-8 rounded-full bg-sidebar-accent text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold cursor-default"
+                aria-label={`${user.nombre} (${user.rol.toLowerCase()})`}
+              >
+                {user.nombre.charAt(0).toUpperCase()}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {user.nombre} · <span className="capitalize">{user.rol.toLowerCase()}</span>
+            </TooltipContent>
+          </Tooltip>
         </div>
       </aside>
 
@@ -125,9 +150,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   key={item.href}
                   to={item.href}
                   onClick={() => setMobileOpen(false)}
-                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium ${
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium ${
                     active
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                      ? "bg-brand text-brand-foreground"
                       : "text-sidebar-foreground/70 hover:text-sidebar-foreground"
                   }`}
                 >
