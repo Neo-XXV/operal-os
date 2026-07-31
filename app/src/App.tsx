@@ -8,6 +8,7 @@ import LeadDetail from './pages/LeadDetail'
 import EventLog from './pages/EventLog'
 import Llamadas from './pages/Llamadas'
 import Calendario from './pages/Calendario'
+import Inteligencia from './pages/Inteligencia'
 
 export default function App() {
   return (
@@ -21,6 +22,7 @@ export default function App() {
       <Route path="/event-log" element={<EventLog />} />
       <Route path="/llamadas" element={<Llamadas />} />
       <Route path="/calendario" element={<Calendario />} />
+      <Route path="/ia" element={<Inteligencia />} />
     </Routes>
   )
 }

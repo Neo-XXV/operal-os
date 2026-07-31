@@ -12,6 +12,7 @@ import {
   X,
   Phone,
   CalendarDays,
+  Sparkles,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -50,6 +51,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
     // /llamadas, esto SI participa el setter (agenda en C/D junto al
     // admin), asi que no va gateado por isAdmin.
     { href: "/calendario", label: "Calendario", icon: CalendarDays },
+    // Fase B: UI de la capa de IA -- solo ADMIN, igual que los 4 endpoints
+    // que consume (docs/10_arquitectura_ia.md: el unico consumidor es el admin).
+    ...(isAdmin ? [{ href: "/ia", label: "Inteligencia", icon: Sparkles }] : []),
     // Event Log es una vista de auditoria global — no aporta al centro
     // operativo del setter (su tabla + el detalle de cada lead). Sigue
     // existiendo para ADMIN/MANAGER, solo se saca del nav del setter.
