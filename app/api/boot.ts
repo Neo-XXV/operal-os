@@ -30,8 +30,13 @@ if (env.isProduction) {
   const { serveStaticFiles } = await import("./lib/vite");
   serveStaticFiles(app);
 
+  // Sin host explicito: @hono/node-server escucha en todas las interfaces
+  // por defecto (verificado: bindea "::", no solo loopback), que es lo que
+  // necesita un host como Railway para rutear trafico al contenedor. El
+  // puerto SIEMPRE viene de PORT -- Railway lo asigna dinamicamente, nunca
+  // es un valor fijo que el codigo pueda asumir.
   const port = parseInt(process.env.PORT || "3000");
   serve({ fetch: app.fetch, port }, () => {
-    console.log(`Server running on http://localhost:${port}/`);
+    console.log(`Server listening on port ${port}`);
   });
 }
