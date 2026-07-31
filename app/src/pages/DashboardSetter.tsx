@@ -4,7 +4,12 @@ import { toast } from "sonner";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  GlassPanel as Card,
+  GlassPanelContent as CardContent,
+  GlassPanelHeader as CardHeader,
+  GlassPanelTitle as CardTitle,
+} from "@/components/GlassPanel";
 import { Button } from "@/components/ui/button";
 import { PeriodoSelector } from "@/components/PeriodoSelector";
 import {
@@ -23,7 +28,18 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { STATUS, TRANSICIONES, formatPct, wash } from "@/lib/embudoDisplay";
+import { STATUS, TRANSICIONES, ETAPAS_TASA, formatPct, wash } from "@/lib/embudoDisplay";
+import { Medidor } from "@/components/charts/Medidor";
+import { MiniEmbudo } from "@/components/charts/MiniEmbudo";
+// Mismos umbrales reales que usa el ejecutivo y el motor de reglas.
+import { ANOMALIA_CONFIG } from "@contracts/anomaliaConfig";
+
+const UMBRAL_POR_TRANSICION: Record<string, { umbral: number; objetivo: number | null } | undefined> = {
+  MSR: { umbral: ANOMALIA_CONFIG.conversion.MSR_BAJO.umbral, objetivo: ANOMALIA_CONFIG.conversion.MSR_BAJO.objetivo },
+  PRR: { umbral: ANOMALIA_CONFIG.conversion.PRR_BAJO.umbral, objetivo: ANOMALIA_CONFIG.conversion.PRR_BAJO.objetivo },
+  CSR: { umbral: ANOMALIA_CONFIG.conversion.CSR_BAJO.umbral, objetivo: ANOMALIA_CONFIG.conversion.CSR_BAJO.objetivo },
+  ABR: undefined,
+};
 import { XCircle, UserCog, TriangleAlert } from "lucide-react";
 
 // Mismos motivos/colores que Leads.tsx -- no se extraen (son chicos, no vale
@@ -159,7 +175,7 @@ export default function DashboardSetter() {
 
   return (
     <Layout>
-      <div className="-m-6 p-6 min-h-[calc(100vh-1px)] bg-background text-foreground space-y-6">
+      <div className="-m-6 p-6 min-h-[calc(100vh-1px)] text-foreground space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
@@ -197,26 +213,55 @@ export default function DashboardSetter() {
                 lead asignado en el momento de cada transición)
               </p>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-6">
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                 {TRANSICIONES.map((t) => {
                   const valor = setterInfo.tasas[t.key];
-                  const num = t.key === "MSR" ? "MS" : t.key === "PRR" ? "B" : t.key === "CSR" ? "C" : "D";
-                  const den = t.key === "MSR" ? "A" : t.key === "PRR" ? "MS" : t.key === "CSR" ? "B" : "C";
+                  const { num, den } = ETAPAS_TASA[t.key];
+                  const conteo = {
+                    num: setterInfo.conteos[num],
+                    den: setterInfo.conteos[den],
+                  };
+                  const umbrales = UMBRAL_POR_TRANSICION[t.key];
+
+                  // Igual que en el ejecutivo: ABR no tiene umbral de tasa
+                  // (la anomalia de C -> D es de tiempo, no de conversion),
+                  // asi que se muestra como tasa simple en vez de inventarle
+                  // un limite contra el cual medirla.
+                  if (!umbrales) {
+                    return (
+                      <div key={t.key} className="glass rounded-2xl p-4">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {t.label} <span className="text-muted-foreground">({t.key})</span>
+                        </span>
+                        <p className="text-lg font-semibold text-foreground mt-2 tabular-nums">
+                          {formatPct(valor)}
+                          <span className="ml-1.5 text-xs font-normal text-muted-foreground tabular-nums">
+                            {conteo.num}/{conteo.den}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1.5">Sin umbral: se evalúa por tiempo</p>
+                      </div>
+                    );
+                  }
+
                   return (
-                    <div key={t.key} className="rounded-lg p-4" style={{ border: "1px solid hsl(var(--border))" }}>
-                      <p className="text-xs font-medium text-muted-foreground">
-                        {t.label} <span className="text-muted-foreground">({t.key})</span>
-                      </p>
-                      <p className="text-2xl font-semibold text-foreground mt-1">{formatPct(valor)}</p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        {t.desc} — {setterInfo.conteos[num as "A" | "MS" | "B" | "C" | "D"]}/
-                        {setterInfo.conteos[den as "A" | "MS" | "B" | "C" | "D"]}
-                      </p>
-                    </div>
+                    <Medidor
+                      key={t.key}
+                      label={`${t.label} (${t.key})`}
+                      valor={valor}
+                      umbral={umbrales.umbral}
+                      objetivo={umbrales.objetivo}
+                      conteo={conteo}
+                      descripcion={t.desc}
+                    />
                   );
                 })}
               </div>
+
+              {/* Volumen por etapa del setter: el medidor cuenta la tasa,
+                  esto cuenta cuantos leads llego a mover en cada punto. */}
+              <MiniEmbudo conteos={setterInfo.conteos} />
             </CardContent>
           </Card>
         )}
@@ -241,8 +286,8 @@ export default function DashboardSetter() {
                   return (
                     <div
                       key={a.id}
-                      className="rounded-lg p-4 flex items-start justify-between gap-4"
-                      style={{ border: `1px solid ${wash(STATUS.warning, 25)}`, backgroundColor: wash(STATUS.warning, 5) }}
+                      className="glass rounded-2xl p-4 flex items-start justify-between gap-4"
+                      style={{ borderColor: wash(STATUS.warning, 35) }}
                     >
                       <div className="flex items-start gap-3">
                         <TriangleAlert className="w-4 h-4 mt-0.5 shrink-0" style={{ color: STATUS.warning }} />
