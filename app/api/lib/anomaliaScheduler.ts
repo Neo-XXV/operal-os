@@ -1,6 +1,6 @@
 import { getDb } from "../queries/connection";
 import { evaluarAnomalias } from "../routers/anomalia";
-import { ANOMALIA_CONFIG } from "./anomaliaConfig";
+import { ANOMALIA_CONFIG } from "@contracts/anomaliaConfig";
 
 // Barrido periodico en el mismo proceso -- no hay infraestructura de
 // cron/job scheduler en el proyecto (Hono + tRPC, proceso unico). Corrida

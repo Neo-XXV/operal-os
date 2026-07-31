@@ -3,7 +3,7 @@ import { createRouter, adminQuery, authedQuery } from "../middleware";
 import { getDb } from "../queries/connection";
 import { eventos, users } from "@db/schema";
 import { eq, and, desc, gte, inArray, sql } from "drizzle-orm";
-import { ANOMALIA_CONFIG, type TipoAnomaliaConversion, type TipoAnomaliaTiempo } from "../lib/anomaliaConfig";
+import { ANOMALIA_CONFIG, type TipoAnomaliaConversion, type TipoAnomaliaTiempo } from "@contracts/anomaliaConfig";
 import { obtenerSetterActual, construirAsignacionPorSetter } from "./event";
 import { obtenerCalendarVigente } from "./calendar";
 

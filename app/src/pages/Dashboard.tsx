@@ -22,18 +22,42 @@ import {
   ChartLegendContent,
   type ChartConfig,
 } from "@/components/ui/chart";
-import { Users, Activity, UserX, CalendarCheck, TriangleAlert } from "lucide-react";
+import { TriangleAlert } from "lucide-react";
 import {
-  CAT,
   STATUS,
   CHROME,
   TRANSICIONES,
+  ETAPAS_TASA,
   formatPct,
   wash,
   CeldaTasa,
   DeltaTasa,
-  DeltaVisual,
 } from "@/lib/embudoDisplay";
+import { StatTile } from "@/components/charts/StatTile";
+import { Medidor } from "@/components/charts/Medidor";
+import { MiniEmbudo } from "@/components/charts/MiniEmbudo";
+// Umbrales reales del motor de reglas -- unica fuente (docs/02_reglas_de_negocio
+// seccion 9), no se duplican los numeros aca. Vive en contracts/ y no en api/
+// porque el frontend NO puede importar de api/ por ruta relativa: esa URL cae
+// bajo /api/*, que el router de Hono reclama y responde 404. contracts/ existe
+// justo para el codigo que cruza la frontera (tiene alias en ambos lados).
+import { ANOMALIA_CONFIG } from "@contracts/anomaliaConfig";
+
+// Mapea cada transicion del embudo a su umbral/objetivo. ABR queda afuera a
+// proposito: no existe umbral de tasa para C -> D (ver comentario en el
+// render), asi que esa transicion no lleva medidor.
+const UMBRAL_POR_TRANSICION: Record<string, { umbral: number; objetivo: number | null } | undefined> = {
+  MSR: { umbral: ANOMALIA_CONFIG.conversion.MSR_BAJO.umbral, objetivo: ANOMALIA_CONFIG.conversion.MSR_BAJO.objetivo },
+  PRR: { umbral: ANOMALIA_CONFIG.conversion.PRR_BAJO.umbral, objetivo: ANOMALIA_CONFIG.conversion.PRR_BAJO.objetivo },
+  CSR: { umbral: ANOMALIA_CONFIG.conversion.CSR_BAJO.umbral, objetivo: ANOMALIA_CONFIG.conversion.CSR_BAJO.objetivo },
+  ABR: undefined,
+};
+
+// Formato compacto para valores de stat tile (contrato del sistema).
+function fmtNum(v: number | undefined) {
+  if (v === undefined) return "—";
+  return v >= 10000 ? `${(v / 1000).toFixed(1).replace(".", ",")}K` : String(v);
+}
 
 // Forma "emphasis" (skill dataviz): una serie es el punto, el resto es
 // contexto — 1 hue de acento + gris, no 4 colores categoricos. El acento es
@@ -71,67 +95,6 @@ const ORIGEN_LABELS: Record<string, string> = {
   RPP: "RPP",
 };
 
-// invertido=true significa "menos es mejor" (ej: descartados). El resto de
-// las metricas del dashboard son "mas es mejor". onGradient=true renuncia al
-// color good/critical (contraste no garantizado contra un gradiente saturado
-// arbitrario) y usa blanco + el icono de direccion, que ya alcanza para leer
-// "subio/bajo" sin necesitar el color como canal.
-function DeltaConteo({
-  actual,
-  anterior,
-  invertido = false,
-  onGradient = false,
-}: {
-  actual: number;
-  anterior: number | null;
-  invertido?: boolean;
-  onGradient?: boolean;
-}) {
-  if (anterior === null) {
-    return <span className={`text-xs ${onGradient ? "text-white/70" : "text-muted-foreground"}`}>Sin dato previo</span>;
-  }
-  const delta = actual - anterior;
-  return <DeltaVisual delta={delta} invertido={invertido} texto={`${delta > 0 ? "+" : ""}${delta}`} onGradient={onGradient} />;
-}
-
-// Tile decorativa de KPI: numero unico, no una serie comparativa -- el
-// gradiente es marca, no codifica dato, asi que no requiere el gate CVD que
-// si aplica a las lineas/barras reales de abajo (skill dataviz, "choosing a
-// form": un stat tile no es un chart).
-function KpiTile({
-  label,
-  icon: Icon,
-  value,
-  gradient,
-  delta,
-}: {
-  label: string;
-  icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>;
-  value: number | string;
-  gradient?: [string, string];
-  delta?: React.ReactNode;
-}) {
-  return (
-    <div
-      className="rounded-2xl p-5 flex flex-col justify-between min-h-[132px]"
-      style={
-        gradient
-          ? { backgroundImage: `linear-gradient(135deg, ${gradient[0]}, ${gradient[1]})` }
-          : { backgroundColor: "hsl(var(--card))", border: "1px solid hsl(var(--border))" }
-      }
-    >
-      <div className="flex items-center justify-between">
-        <span className={`text-sm font-medium ${gradient ? "text-white/90" : "text-muted-foreground"}`}>{label}</span>
-        <Icon className={`w-5 h-5 ${gradient ? "text-white/80" : ""}`} style={!gradient ? { color: STATUS.critical } : undefined} />
-      </div>
-      <div>
-        <span className={`text-4xl font-bold ${gradient ? "text-white" : "text-foreground"}`}>{value}</span>
-        {delta && <div className="mt-2">{delta}</div>}
-      </div>
-    </div>
-  );
-}
-
 export default function Dashboard() {
   const { user, isAdmin, isSetter } = useAuth();
   const { data: leads } = trpc.lead.list.useQuery();
@@ -141,13 +104,21 @@ export default function Dashboard() {
   const [rangoHasta, setRangoHasta] = useState("");
 
   const queryHabilitada = isAdmin && (periodo !== "rango" || !!rangoDesde);
-  const { data: dashboard, isLoading: cargandoDashboard } = trpc.event.dashboardEjecutivo.useQuery(
+
+  // placeholderData en cada query: al cambiar de periodo la key cambia y,
+  // sin esto, react-query descarta el render anterior y la pantalla salta a
+  // "Calculando..." (el anti-patron de "skeleton flash on refetch"). Con esto
+  // se sostiene el render previo y solo se baja la opacidad mientras llega el
+  // dato nuevo -- sin salto de layout. Va inline y no en un objeto compartido
+  // porque el tipo del placeholder es el de CADA query.
+
+  const { data: dashboard, isFetching: refrescandoDashboard } = trpc.event.dashboardEjecutivo.useQuery(
     {
       periodo: periodo as "lifetime" | "mensual" | "trimestral" | "semestral" | "anual" | "rango",
       desde: periodo === "rango" && rangoDesde ? new Date(rangoDesde) : undefined,
       hasta: periodo === "rango" && rangoHasta ? new Date(rangoHasta) : undefined,
     },
-    { enabled: queryHabilitada },
+    { enabled: queryHabilitada, placeholderData: (prev) => prev },
   );
 
   // Sprint 3, punto 2: serie historica — solo tiene sentido para las 4
@@ -155,7 +126,7 @@ export default function Dashboard() {
   // bucket natural que inventar).
   const { data: historico } = trpc.event.dashboardHistorico.useQuery(
     { granularidad: periodo as GranularidadHistorico },
-    { enabled: isAdmin && esGranularidadHistorico(periodo) },
+    { enabled: isAdmin && esGranularidadHistorico(periodo), placeholderData: (prev) => prev },
   );
 
   // Sprint 3, punto 3: comparacion por setter — respeta el mismo periodo
@@ -166,7 +137,7 @@ export default function Dashboard() {
       desde: periodo === "rango" && rangoDesde ? new Date(rangoDesde) : undefined,
       hasta: periodo === "rango" && rangoHasta ? new Date(rangoHasta) : undefined,
     },
-    { enabled: queryHabilitada },
+    { enabled: queryHabilitada, placeholderData: (prev) => prev },
   );
 
   // Sprint 3, punto 4: comparacion por origen del lead — mismo periodo.
@@ -176,7 +147,7 @@ export default function Dashboard() {
       desde: periodo === "rango" && rangoDesde ? new Date(rangoDesde) : undefined,
       hasta: periodo === "rango" && rangoHasta ? new Date(rangoHasta) : undefined,
     },
-    { enabled: queryHabilitada },
+    { enabled: queryHabilitada, placeholderData: (prev) => prev },
   );
 
   // Sprint 2: la tabla de leads es el centro operativo del setter — no un
@@ -193,21 +164,27 @@ export default function Dashboard() {
     leadsByStage[stage] = (leadsByStage[stage] ?? 0) + 1;
   });
 
-  const stageNames: Record<string, string> = {
-    A: "Primer mensaje",
-    MS: "Respondio",
-    B: "Pitch enviado",
-    C: "Agendado",
-    D: "Confirmado",
-    "Sin etapa": "Sin etapa",
-  };
-
-  const stageOrder = ["A", "MS", "B", "C", "D", "Sin etapa"];
+  // Las etiquetas y el orden de las etapas ahora viven en MiniEmbudo, que es
+  // el unico consumidor -- no hacia falta mantenerlos aca duplicados.
 
   const cuelloDeBotella = dashboard?.cuelloDeBotella;
   const transicionCuelloDeBotella = cuelloDeBotella
     ? TRANSICIONES.find((t) => t.key === cuelloDeBotella.key)
     : null;
+
+  // Serie real para las sparklines de las stat tiles. Devuelve undefined
+  // cuando el periodo elegido no tiene serie (lifetime/rango) -- la tile
+  // entonces se dibuja sin sparkline, en vez de interpolar una tendencia
+  // que el backend no calculo.
+  //
+  // El gate va contra el PERIODO, no contra `historico`: placeholderData
+  // sostiene a proposito el dato de la consulta anterior, asi que al pasar a
+  // lifetime `historico` sigue trayendo la serie mensual vieja. Sin este
+  // chequeo la tile mostraria un valor lifetime con una tendencia mensual
+  // pegada al lado -- que es justo la mentira que se queria evitar.
+  const hayserie = esGranularidadHistorico(periodo);
+  const serieDe = (kpi: "leadsNuevos" | "activos" | "descartados" | "agendados") =>
+    hayserie ? historico?.serie.map((b) => b.kpis[kpi]) : undefined;
 
   const datosHistorico = historico?.serie.map((b) => ({
     etiqueta: formatearEtiquetaBucket(b.desde, historico.granularidad as GranularidadHistorico),
@@ -235,7 +212,12 @@ export default function Dashboard() {
           <TabsContent value="por-setter" className="mt-4">
             <PorSetterTab />
           </TabsContent>
-          <TabsContent value="general" className="mt-4 space-y-6">
+          {/* Sostiene el render previo con opacidad reducida mientras llega
+              el dato del periodo nuevo -- sin salto de layout. */}
+          <TabsContent
+            value="general"
+            className={`mt-4 space-y-6 transition-opacity ${refrescandoDashboard ? "opacity-60" : "opacity-100"}`}
+          >
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
@@ -268,9 +250,7 @@ export default function Dashboard() {
               className="rounded-2xl p-5"
               style={{ backgroundColor: "hsl(var(--card))", border: `1px solid ${wash(STATUS.warning, 25)}` }}
             >
-              {cargandoDashboard ? (
-                <p className="text-sm text-muted-foreground">Calculando...</p>
-              ) : !cuelloDeBotella || !transicionCuelloDeBotella ? (
+              {!cuelloDeBotella || !transicionCuelloDeBotella ? (
                 <p className="text-sm text-muted-foreground">
                   Todavia no hay suficientes datos en este período para identificar un cuello de botella.
                 </p>
@@ -311,32 +291,33 @@ export default function Dashboard() {
                 critical fijo -- el tratamiento visual no debe sugerir que un
                 numero alto ahi es un logro. */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              <KpiTile
+              <StatTile
                 label="Leads nuevos"
-                icon={Users}
-                value={dashboard?.kpis.actual.leadsNuevos ?? "—"}
-                gradient={[CAT.violet, CAT.magenta]}
-                delta={dashboard && <DeltaConteo actual={dashboard.kpis.actual.leadsNuevos} anterior={dashboard.kpis.anterior?.leadsNuevos ?? null} onGradient />}
+                value={fmtNum(dashboard?.kpis.actual.leadsNuevos)}
+                trend={serieDe("leadsNuevos")}
+                delta={dashboard ? { actual: dashboard.kpis.actual.leadsNuevos, anterior: dashboard.kpis.anterior?.leadsNuevos ?? null } : undefined}
               />
-              <KpiTile
+              <StatTile
                 label="Activos"
-                icon={Activity}
-                value={dashboard?.kpis.actual.activos ?? "—"}
-                gradient={[CAT.blue, CAT.aqua]}
-                delta={dashboard && <DeltaConteo actual={dashboard.kpis.actual.activos} anterior={dashboard.kpis.anterior?.activos ?? null} onGradient />}
+                value={fmtNum(dashboard?.kpis.actual.activos)}
+                trend={serieDe("activos")}
+                delta={dashboard ? { actual: dashboard.kpis.actual.activos, anterior: dashboard.kpis.anterior?.activos ?? null } : undefined}
               />
-              <KpiTile
+              <StatTile
                 label="Descartados"
-                icon={UserX}
-                value={dashboard?.kpis.actual.descartados ?? "—"}
-                delta={dashboard && <DeltaConteo actual={dashboard.kpis.actual.descartados} anterior={dashboard.kpis.anterior?.descartados ?? null} invertido />}
+                value={fmtNum(dashboard?.kpis.actual.descartados)}
+                trend={serieDe("descartados")}
+                // Metrica invertida: subir es malo. Solo cambia el color del
+                // delta -- el tratamiento visual nunca sugiere que un numero
+                // alto aca sea un logro.
+                invertido
+                delta={dashboard ? { actual: dashboard.kpis.actual.descartados, anterior: dashboard.kpis.anterior?.descartados ?? null } : undefined}
               />
-              <KpiTile
+              <StatTile
                 label="Agendados"
-                icon={CalendarCheck}
-                value={dashboard?.kpis.actual.agendados ?? "—"}
-                gradient={[CAT.orange, CAT.yellow]}
-                delta={dashboard && <DeltaConteo actual={dashboard.kpis.actual.agendados} anterior={dashboard.kpis.anterior?.agendados ?? null} onGradient />}
+                value={fmtNum(dashboard?.kpis.actual.agendados)}
+                trend={serieDe("agendados")}
+                delta={dashboard ? { actual: dashboard.kpis.actual.agendados, anterior: dashboard.kpis.anterior?.agendados ?? null } : undefined}
               />
             </div>
           </>
@@ -351,33 +332,10 @@ export default function Dashboard() {
             </p>
           </CardHeader>
           <CardContent>
-            <div className="space-y-3">
-              {stageOrder.map((stage) => {
-                const count = leadsByStage[stage] ?? 0;
-                const maxCount = Math.max(...Object.values(leadsByStage), 1);
-                const pct = (count / maxCount) * 100;
-                return (
-                  <div key={stage} className="flex items-center gap-4">
-                    <div className="w-32 text-sm font-medium text-muted-foreground">
-                      {stageNames[stage] ?? stage}
-                    </div>
-                    <div className="flex-1 h-8 bg-muted/50 rounded-lg overflow-hidden">
-                      <div
-                        className="h-full rounded-lg flex items-center px-3 transition-all"
-                        style={{ width: `${Math.max(pct, 5)}%`, backgroundColor: CAT.blue }}
-                      >
-                        <span className="text-white text-sm font-semibold">
-                          {count}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="w-12 text-right text-sm text-muted-foreground">
-                      {count}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+            <MiniEmbudo
+              conteos={leadsByStage}
+              extra={[{ key: "Sin etapa", label: "Sin etapa", valor: leadsByStage["Sin etapa"] ?? 0 }]}
+            />
           </CardContent>
         </Card>
 
@@ -395,28 +353,46 @@ export default function Dashboard() {
                 {TRANSICIONES.map((t) => {
                   const valor = dashboard.embudo.actual.tasas[t.key];
                   const valorAnterior = dashboard.embudo.anterior?.tasas[t.key] ?? null;
-                  const esCuelloDeBotella = t.key === cuelloDeBotella?.key;
-                  return (
-                    <div
-                      key={t.key}
-                      className="rounded-lg p-4"
-                      style={
-                        esCuelloDeBotella
-                          ? { border: `1px solid ${wash(STATUS.warning, 25)}`, backgroundColor: wash(STATUS.warning, 8) }
-                          : { border: "1px solid hsl(var(--border))" }
-                      }
-                    >
-                      <p className="text-xs font-medium text-muted-foreground">
-                        {t.label} <span className="text-muted-foreground">({t.key})</span>
-                      </p>
-                      <p className="text-2xl font-semibold text-foreground mt-1">
-                        {formatPct(valor)}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-1">{t.desc}</p>
-                      <div className="mt-2">
-                        <DeltaTasa actual={valor} anterior={valorAnterior} />
+                  const umbrales = UMBRAL_POR_TRANSICION[t.key];
+                  const conteos = dashboard.embudo.actual.conteos;
+                  const { num, den } = ETAPAS_TASA[t.key];
+
+                  // ABR (C -> D) no tiene umbral de tasa: por diseno del
+                  // dominio la anomalia de C->D es puramente de TIEMPO y
+                  // reemplaza a cualquier "ABR bajo" (02_reglas_de_negocio
+                  // seccion 9). Sin umbral no hay medidor honesto que
+                  // dibujar, asi que esa transicion se muestra como tasa
+                  // simple con su delta.
+                  if (!umbrales) {
+                    return (
+                      <div key={t.key} className="rounded-2xl bg-card border border-border shadow-panel p-4">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {t.label} <span className="text-muted-foreground">({t.key})</span>
+                        </span>
+                        <p className="text-lg font-semibold text-foreground mt-2 tabular-nums">
+                          {formatPct(valor)}
+                          <span className="ml-1.5 text-xs font-normal text-muted-foreground tabular-nums">
+                            {conteos[num]}/{conteos[den]}
+                          </span>
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-1.5">Sin umbral: se evalúa por tiempo</p>
+                        <div className="mt-2">
+                          <DeltaTasa actual={valor} anterior={valorAnterior} />
+                        </div>
                       </div>
-                    </div>
+                    );
+                  }
+
+                  return (
+                    <Medidor
+                      key={t.key}
+                      label={`${t.label} (${t.key})`}
+                      valor={valor}
+                      umbral={umbrales.umbral}
+                      objetivo={umbrales.objetivo}
+                      conteo={{ num: conteos[num], den: conteos[den] }}
+                      descripcion={t.desc}
+                    />
                   );
                 })}
               </div>

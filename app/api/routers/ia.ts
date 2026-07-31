@@ -6,7 +6,7 @@ import { eq, and, gte, lte, isNull, isNotNull, inArray, desc } from "drizzle-orm
 import { GeminiProvider } from "../lib/geminiProvider";
 import { validarRespuesta } from "../lib/iaValidador";
 import { resolverVentana, calcularEmbudo, conLeadId } from "./event";
-import { ANOMALIA_CONFIG, type TipoAnomaliaTiempo } from "../lib/anomaliaConfig";
+import { ANOMALIA_CONFIG, type TipoAnomaliaTiempo } from "@contracts/anomaliaConfig";
 
 const TIPOS_CONVERSION = ["MSR_BAJO", "PRR_BAJO", "CSR_BAJO"] as const;
 
