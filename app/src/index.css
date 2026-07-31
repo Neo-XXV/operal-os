@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
+    --background: 0 0% 92%;
     --foreground: 240 10% 3.9%;
     --card: 0 0% 100%;
     --card-foreground: 240 10% 3.9%;
@@ -16,9 +16,8 @@
     --secondary-foreground: 240 5.9% 10%;
     --muted: 240 4.8% 95.9%;
     /* Mas oscuro que el 46.1% por defecto de shadcn: ese valor asume fondo
-       blanco pleno. Sobre un panel glass con la malla de color debajo caia
-       a 2.9:1 (medido), por debajo del minimo para texto. A 32% queda en
-       5.3:1 sobre el peor caso de la malla y 8.4:1 sobre blanco. */
+       blanco pleno. Se conserva el valor mas oscuro por margen: sobre el
+       panel glass actual queda holgado (medido abajo). */
     --muted-foreground: 240 5% 32%;
     --accent: 240 4.8% 95.9%;
     --accent-foreground: 240 5.9% 10%;
@@ -82,33 +81,23 @@
     --status-critical: #d03b3b;
 
     /* ── Glass ─────────────────────────────────────────────────────
-       El panel es blanco semitransparente sobre la malla del body. El
-       alpha esta calibrado para que el texto siga legible sobre
-       cualquier zona de la malla, no solo sobre las claras. */
+       Sobre fondo PLANO el vidrio tiene que separarse por si mismo: el
+       alpha es mas alto que en la version sobre malla, para que la tarjeta
+       lea claramente mas clara que la pagina. */
     --glass: 0 0% 100%;
-    --glass-alpha: 0.55;
+    --glass-alpha: 0.72;
     --glass-border: 0 0% 100%;
-    --glass-border-alpha: 0.75;
+    --glass-border-alpha: 0.9;
     --glass-sheen: 0 0% 100%;
     --glass-sheen-alpha: 0.9;
 
-    /* Malla de fondo: tiene que ser VISIBLE, si no el frosted glass no se
-       lee (un panel translucido sobre casi-blanco parece un panel opaco).
-       Familia navy/violeta/durazno, saturada pero sin llegar al neon. */
-    --mesh-1: 224 70% 68%;
-    --mesh-2: 200 65% 72%;
-    --mesh-3: 265 55% 74%;
-    --mesh-4: 25 65% 78%;
   }
 
-  /* Modo oscuro -- chrome/ink oscuros de la paleta validada (skill dataviz)
-     sobre gris neutro calido, no el tinte purpura anterior: el purpura pasaba
-     todas las validaciones de contraste, se neutraliza por el principio de
-     sobriedad del rediseno, no porque fallara nada. */
+  /* Modo oscuro -- fondo uniforme, sin gradientes ni luces de color. */
   .dark {
-    --background: 0 0% 5.1%;
+    --background: 240 4% 8%;
     --foreground: 0 0% 100%;
-    --card: 60 2% 10%;
+    --card: 240 5% 13%;
     --card-foreground: 0 0% 100%;
     --popover: 60 2% 10%;
     --popover-foreground: 0 0% 100%;
@@ -125,7 +114,7 @@
     --border: 60 2.3% 16.9%;
     --input: 60 2.3% 16.9%;
     --ring: 211.7 96.4% 78.4%;
-    --sidebar-background: 0 0% 5.1%;
+    --sidebar-background: 240 4% 8%;
     --sidebar-foreground: 55 9.1% 74.1%;
     --sidebar-primary: 224.4 64.3% 32.9%;
     --sidebar-primary-foreground: 0 0% 100%;
@@ -163,20 +152,13 @@
     /* Glass oscuro: el panel es un gris muy oscuro semitransparente. El
        borde deja de ser blanco pleno y baja a un brillo tenue -- en oscuro
        un canto blanco fuerte se ve como un halo, no como vidrio. */
-    --glass: 240 6% 12%;
-    --glass-alpha: 0.58;
+    --glass: 240 5% 20%;
+    --glass-alpha: 0.6;
     --glass-border: 0 0% 100%;
     --glass-border-alpha: 0.12;
     --glass-sheen: 0 0% 100%;
     --glass-sheen-alpha: 0.06;
 
-    /* Malla oscura: mismos hues, mucho mas profundos. Verificado que el
-       texto secundario queda en 5.8:1 sobre el panel glass, asi que aca no
-       hizo falta tocar --muted-foreground. */
-    --mesh-1: 224 62% 26%;
-    --mesh-2: 200 55% 18%;
-    --mesh-3: 265 45% 24%;
-    --mesh-4: 205 35% 16%;
   }
 }
 
@@ -185,21 +167,15 @@
     @apply border-border;
   }
 
-  /* Fondo de la app: malla de gradientes en vez de un color plano. Es lo
-     que hace que el backdrop-blur de los paneles tenga algo real que
-     desenfocar -- sin esto el "frosted glass" no se ve, porque no hay nada
-     detras. Va fijo (no scrollea) para que las tarjetas floten sobre el.
-     Tonos bajos en saturacion: la profundidad la da la capa, no el color. */
+  /* Fondo de pagina: color PLANO y parejo, sin gradientes ni manchas de
+     color. La profundidad la aportan las tarjetas (glass, borde con brillo,
+     sombra), no el fondo.
+     Consecuencia asumida: con un fondo uniforme el backdrop-blur casi no
+     tiene textura que desenfocar, asi que el vidrio se lee sobre todo por
+     translucidez + borde + sombra, no por el "frosted" de la referencia. */
   body {
     @apply text-foreground;
     background-color: hsl(var(--background));
-    background-image:
-      radial-gradient(58rem 42rem at 12% -8%, hsl(var(--mesh-1) / 0.55), transparent 60%),
-      radial-gradient(48rem 38rem at 92% 4%, hsl(var(--mesh-2) / 0.5), transparent 62%),
-      radial-gradient(52rem 44rem at 72% 88%, hsl(var(--mesh-3) / 0.45), transparent 60%),
-      radial-gradient(40rem 34rem at 22% 96%, hsl(var(--mesh-4) / 0.4), transparent 60%);
-    background-attachment: fixed;
-    background-repeat: no-repeat;
     min-height: 100vh;
   }
 }
@@ -207,8 +183,8 @@
 @layer utilities {
   /* Frosted glass. El blur alto + saturate es lo que da el vidrio de la
      referencia; el borde claro arriba simula el canto iluminado del panel.
-     El fondo semitransparente se apoya en la malla de body, asi que estos
-     paneles NO funcionan sobre un fondo plano. */
+     Con el fondo de pagina plano el blur casi no tiene textura que
+     desenfocar: el vidrio se lee por translucidez + borde + sombra. */
   .glass {
     background-color: hsl(var(--glass) / var(--glass-alpha));
     backdrop-filter: blur(22px) saturate(180%);

@@ -61,9 +61,9 @@ export function Layout({ children }: { children: React.ReactNode }) {
   ];
 
   return (
-    // Sin bg-background: el contenedor tiene que ser transparente para que
-    // se vea la malla de gradientes del body, que es lo que el
-    // backdrop-blur de los paneles desenfoca.
+    // Sin bg-background: el contenedor queda transparente y deja ver el
+    // fondo plano del body. Ponerle fondo propio aca duplicaria la capa y
+    // dejaria a los paneles glass apoyados sobre un opaco intermedio.
     <div className="flex h-screen">
       {/* Sidebar compacta icon-first (desktop). El label vive en el tooltip,
           no en la barra: la navegacion no compite por ancho con el contenido
@@ -179,7 +179,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         )}
       </div>
 
-      {/* Main content -- transparente, deja pasar la malla del body */}
+      {/* Main content -- transparente, deja pasar el fondo del body */}
       <main className="flex-1 overflow-auto pt-16 md:pt-0 text-foreground">
         <div className="p-6 max-w-7xl mx-auto">{children}</div>
       </main>
