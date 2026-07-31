@@ -20,8 +20,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { GlassPanel as Card, GlassPanelContent as CardContent } from "@/components/GlassPanel";
-import { Plus, UserCheck, UserX } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Plus, UserCheck, UserX, Trash2, RotateCcw } from "lucide-react";
 
 export default function Usuarios() {
   const { isAdmin, isLoading: authLoading } = useAuth();
@@ -35,6 +46,8 @@ export default function Usuarios() {
   const [password, setPassword] = useState("");
   const [rol, setRol] = useState<string>("SETTER");
   const [error, setError] = useState("");
+  const [mostrarEliminados, setMostrarEliminados] = useState(false);
+  const [eliminando, setEliminando] = useState<{ id: number; nombre: string } | null>(null);
 
   const createUser = trpc.user.create.useMutation({
     onSuccess: () => {
@@ -49,8 +62,18 @@ export default function Usuarios() {
     onError: (err) => setError(err.message),
   });
 
+  // "Eliminar"/"Restaurar" reusan toggleActive (activo=false/true) -- el
+  // sistema no tiene borrado fisico en ningun lado (event-sourcing,
+  // insert-only), y un DELETE de la fila dejaria colgando el actorId de
+  // eventos historicos y el setter_nuevo/anterior de LEAD_ASIGNADO, sin
+  // forma de resolver el nombre despues. "Eliminar" es una desactivacion
+  // que ademas oculta al usuario de la lista por defecto -- reversible con
+  // "Mostrar eliminados" + "Restaurar", nunca definitiva.
   const toggleActive = trpc.user.toggleActive.useMutation({
-    onSuccess: () => utils.user.list.invalidate(),
+    onSuccess: () => {
+      utils.user.list.invalidate();
+      setEliminando(null);
+    },
   });
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -149,6 +172,11 @@ export default function Usuarios() {
           </Dialog>
         </div>
 
+        <label className="flex items-center gap-2 text-sm text-muted-foreground w-fit cursor-pointer">
+          <Checkbox checked={mostrarEliminados} onCheckedChange={(v) => setMostrarEliminados(!!v)} />
+          Mostrar eliminados
+        </label>
+
         <Card>
           <CardContent className="p-0">
             {isLoading ? (
@@ -159,7 +187,18 @@ export default function Usuarios() {
               <div className="p-8 text-center text-muted-foreground">
                 No hay usuarios registrados
               </div>
-            ) : (
+            ) : (() => {
+              // Eliminado = activo:false, mismo campo que "Desactivar"
+              // siempre uso (ver comentario de toggleActive). Oculto por
+              // defecto para que la lista principal muestre solo usuarios
+              // vigentes -- "Mostrar eliminados" los trae de vuelta a la
+              // vista, nunca los borra de la base.
+              const usersVisibles = mostrarEliminados ? users : users.filter((u) => u.activo);
+              return usersVisibles.length === 0 ? (
+                <div className="p-8 text-center text-muted-foreground">
+                  No hay usuarios eliminados
+                </div>
+              ) : (
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
@@ -185,7 +224,7 @@ export default function Usuarios() {
                     </tr>
                   </thead>
                   <tbody>
-                    {users.map((u) => (
+                    {usersVisibles.map((u) => (
                       <tr
                         key={u.id}
                         className="border-b border-border hover:bg-muted/50"
@@ -206,7 +245,7 @@ export default function Usuarios() {
                           ) : (
                             <span className="inline-flex items-center gap-1 text-red-600 text-xs font-medium">
                               <UserX className="w-3 h-3" />
-                              Inactivo
+                              Eliminado
                             </span>
                           )}
                         </td>
@@ -216,24 +255,61 @@ export default function Usuarios() {
                             : "-"}
                         </td>
                         <td className="py-3 px-4 text-right">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => toggleActive.mutate({ id: u.id })}
-                            disabled={toggleActive.isPending}
-                          >
-                            {u.activo ? "Desactivar" : "Activar"}
-                          </Button>
+                          {u.activo ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setEliminando({ id: u.id, nombre: u.nombre })}
+                            >
+                              <Trash2 className="w-4 h-4 mr-2" />
+                              Eliminar
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => toggleActive.mutate({ id: u.id })}
+                              disabled={toggleActive.isPending}
+                            >
+                              <RotateCcw className="w-4 h-4 mr-2" />
+                              Restaurar
+                            </Button>
+                          )}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
+              );
+            })()}
           </CardContent>
         </Card>
       </div>
+
+      <AlertDialog open={!!eliminando} onOpenChange={(o) => !o && setEliminando(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Eliminar usuario</AlertDialogTitle>
+            <AlertDialogDescription>
+              ¿Eliminar a <strong>{eliminando?.nombre}</strong>? No va a poder iniciar sesión, y desaparece
+              de esta lista. Podés traerlo de vuelta en cualquier momento con "Mostrar eliminados" →
+              "Restaurar" -- no se borra ningún dato ni su historial.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={toggleActive.isPending}
+              onClick={() => {
+                if (eliminando) toggleActive.mutate({ id: eliminando.id });
+              }}
+            >
+              {toggleActive.isPending ? "Eliminando..." : "Eliminar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </Layout>
   );
 }
