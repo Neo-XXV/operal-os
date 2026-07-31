@@ -917,38 +917,38 @@ export default function LeadDetail() {
         </div>
 
         {!timeline || timeline.length === 0 ? (
-          <Card>
-            <CardContent className="py-8 text-center text-muted-foreground">
-              No hay eventos registrados para este lead
-            </CardContent>
-          </Card>
+          <div className="glass rounded-2xl py-8 text-center text-muted-foreground">
+            No hay eventos registrados para este lead
+          </div>
         ) : (
           <div className="space-y-3">
             {timeline.map((ev) => (
-              <Card key={ev.id} className="border-l-4 border-l-slate-300">
-                <CardContent className="p-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
-                          eventColors[ev.tipo] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                        }`}>
-                          {ev.tipo}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {ev.actor?.nombre ?? ev.actorTipo}
-                        </span>
-                      </div>
-                      <pre className="text-xs text-muted-foreground bg-muted/50 p-2 rounded-lg overflow-x-auto">
-                        {JSON.stringify(ev.payload, null, 2)}
-                      </pre>
+              <div key={ev.id} className="glass rounded-2xl border-l-4 border-l-border p-4">
+                <div className="flex items-start justify-between">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${
+                        eventColors[ev.tipo] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                      }`}>
+                        {ev.tipo}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {ev.actor?.nombre ?? ev.actorTipo}
+                      </span>
                     </div>
-                    <span className="text-xs text-muted-foreground ml-4 whitespace-nowrap">
-                      {ev.timestamp ? new Date(ev.timestamp).toLocaleString("es-AR") : ""}
-                    </span>
+                    {/* bg-foreground/[0.04] en vez de bg-muted/50: el mismo
+                        motivo que el header de la tabla de carga rapida --
+                        un "muted" solido apoyado sobre glass se ve como un
+                        recuadro opaco flotando adentro de la tarjeta. */}
+                    <pre className="text-xs text-muted-foreground bg-foreground/[0.04] p-2 rounded-lg overflow-x-auto">
+                      {JSON.stringify(ev.payload, null, 2)}
+                    </pre>
                   </div>
-                </CardContent>
-              </Card>
+                  <span className="text-xs text-muted-foreground ml-4 whitespace-nowrap">
+                    {ev.timestamp ? new Date(ev.timestamp).toLocaleString("es-AR") : ""}
+                  </span>
+                </div>
+              </div>
             ))}
           </div>
         )}
