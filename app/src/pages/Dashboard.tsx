@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Navigate, useNavigate } from "react-router";
+import { Navigate, useNavigate, useSearchParams } from "react-router";
 import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
@@ -12,13 +12,6 @@ import {
 } from "@/components/GlassPanel";
 import { PeriodoSelector } from "@/components/PeriodoSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   ChartContainer,
   ChartTooltip,
@@ -103,6 +96,11 @@ const ORIGEN_LABELS: Record<string, string> = {
 export default function Dashboard() {
   const { user, isAdmin, isSetter } = useAuth();
   const { data: leads } = trpc.lead.list.useQuery();
+
+  // Tab en la URL (no solo en estado local) para que DashboardSetter pueda
+  // volver directo a "Por setter" en vez de aterrizar siempre en "General".
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get("tab") === "por-setter" ? "por-setter" : "general";
 
   const [periodo, setPeriodo] = useState("mensual");
   const [rangoDesde, setRangoDesde] = useState("");
@@ -209,7 +207,10 @@ export default function Dashboard() {
   return (
     <Layout>
       <div className="-m-6 p-6 min-h-[calc(100vh-1px)] text-foreground space-y-6">
-        <Tabs defaultValue="general">
+        <Tabs
+          value={tab}
+          onValueChange={(v) => setSearchParams(v === "general" ? {} : { tab: v })}
+        >
           <TabsList>
             <TabsTrigger value="general">General</TabsTrigger>
             <TabsTrigger value="por-setter">Por setter</TabsTrigger>
@@ -653,33 +654,50 @@ export default function Dashboard() {
 // individual (ruta propia, /dashboard/setter/:id) en vez de reemplazar este
 // contenido -- misma pagina que usa el setter para ver el suyo (ver
 // DashboardSetter.tsx).
+//
+// Tarjetas clickeables en vez de un unico dropdown: mismo patron glass +
+// avatar que ya se valido en Leads.tsx (VistaAdmin) y en LeadDetail --
+// consistente con el resto del sistema rediseñado, y llena la pantalla con
+// contexto real (todos los setters a la vista) en vez de un panel chico
+// flotando solo.
 function PorSetterTab() {
   const navigate = useNavigate();
-  const { data: setters } = trpc.user.setters.useQuery();
+  const { data: setters, isLoading } = trpc.user.setters.useQuery();
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="text-foreground">Dashboard por setter</CardTitle>
-        <p className="text-sm text-muted-foreground">
+    <div className="space-y-4">
+      <div>
+        <h2 className="text-lg font-bold text-foreground">Dashboard por setter</h2>
+        <p className="text-sm text-muted-foreground mt-1">
           Elegí un setter para ver su embudo, su CRM y sus anomalías detectadas
         </p>
-      </CardHeader>
-      <CardContent>
-        <Select onValueChange={(id) => navigate(`/dashboard/setter/${id}`)}>
-          <SelectTrigger className="w-full sm:w-72">
-            <SelectValue placeholder="Seleccionar setter" />
-          </SelectTrigger>
-          <SelectContent>
-            {(setters ?? []).map((s) => (
-              <SelectItem key={s.id} value={String(s.id)}>
-                {s.nombre}
-                {!s.activo && " (inactivo)"}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </CardContent>
-    </Card>
+      </div>
+
+      {isLoading ? (
+        <p className="text-sm text-muted-foreground py-8 text-center">Cargando...</p>
+      ) : !setters || setters.length === 0 ? (
+        <div className="glass rounded-2xl py-12 text-center text-muted-foreground">
+          No hay setters registrados.
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {setters.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => navigate(`/dashboard/setter/${s.id}`)}
+              className="glass rounded-2xl p-4 flex items-center gap-3 text-left transition-shadow hover:shadow-lg"
+            >
+              <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold text-muted-foreground shrink-0">
+                {s.nombre.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <p className="font-semibold text-foreground truncate">{s.nombre}</p>
+                <p className="text-xs text-muted-foreground">{s.activo ? "Activo" : "Inactivo"}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

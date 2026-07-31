@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useParams, Navigate, Link } from "react-router";
+import { useParams, useNavigate, Navigate, Link } from "react-router";
 import { toast } from "sonner";
 import { Layout } from "@/components/Layout";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,7 +40,7 @@ const UMBRAL_POR_TRANSICION: Record<string, { umbral: number; objetivo: number |
   CSR: { umbral: ANOMALIA_CONFIG.conversion.CSR_BAJO.umbral, objetivo: ANOMALIA_CONFIG.conversion.CSR_BAJO.objetivo },
   ABR: undefined,
 };
-import { XCircle, UserCog, TriangleAlert } from "lucide-react";
+import { XCircle, UserCog, TriangleAlert, ArrowLeft } from "lucide-react";
 
 // Mismos motivos/colores que Leads.tsx -- no se extraen (son chicos, no vale
 // tocar un archivo que ya funciona y ya diverge en dos variantes de tabla
@@ -93,6 +93,7 @@ type AnomaliaTiempo = {
 // siendo exclusivo de LeadDetail (ver seccion 10 para el porque).
 export default function DashboardSetter() {
   const { id } = useParams();
+  const navigate = useNavigate();
   const { user, isAdmin, isSetter, isLoading: authLoading } = useAuth();
   const utils = trpc.useUtils();
 
@@ -176,6 +177,24 @@ export default function DashboardSetter() {
   return (
     <Layout>
       <div className="-m-6 p-6 min-h-[calc(100vh-1px)] text-foreground space-y-6">
+        {/* Breadcrumb de vuelta al selector -- solo ADMIN: el setter llega a
+            su propio dashboard por el link directo de la sidebar ("Mi
+            Dashboard"), no por "Por setter" (esa pestaña ni le aparece, ver
+            Dashboard.tsx), asi que "volver" ahi no tendria a donde volver. */}
+        {isAdmin && (
+          <div className="flex items-center gap-1.5 text-sm -mb-2">
+            <button
+              onClick={() => navigate("/?tab=por-setter")}
+              className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              Por setter
+            </button>
+            <span className="text-muted-foreground">/</span>
+            <span className="text-foreground font-medium">{setterInfo?.nombre ?? "..."}</span>
+          </div>
+        )}
+
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">
