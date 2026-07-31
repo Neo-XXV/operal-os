@@ -23,7 +23,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { STATUS, TRANSICIONES, formatPct } from "@/lib/embudoDisplay";
+import { STATUS, TRANSICIONES, formatPct, wash } from "@/lib/embudoDisplay";
 import { XCircle, UserCog, TriangleAlert } from "lucide-react";
 
 // Mismos motivos/colores que Leads.tsx -- no se extraen (son chicos, no vale
@@ -242,7 +242,7 @@ export default function DashboardSetter() {
                     <div
                       key={a.id}
                       className="rounded-lg p-4 flex items-start justify-between gap-4"
-                      style={{ border: `1px solid ${STATUS.warning}40`, backgroundColor: `${STATUS.warning}0d` }}
+                      style={{ border: `1px solid ${wash(STATUS.warning, 25)}`, backgroundColor: wash(STATUS.warning, 5) }}
                     >
                       <div className="flex items-start gap-3">
                         <TriangleAlert className="w-4 h-4 mt-0.5 shrink-0" style={{ color: STATUS.warning }} />

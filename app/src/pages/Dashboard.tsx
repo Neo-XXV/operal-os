@@ -29,6 +29,7 @@ import {
   CHROME,
   TRANSICIONES,
   formatPct,
+  wash,
   CeldaTasa,
   DeltaTasa,
   DeltaVisual,
@@ -265,7 +266,7 @@ export default function Dashboard() {
                 borde + icono en el color de "warning" fijo, nunca color solo. */}
             <div
               className="rounded-2xl p-5"
-              style={{ backgroundColor: "hsl(var(--card))", border: `1px solid ${STATUS.warning}40` }}
+              style={{ backgroundColor: "hsl(var(--card))", border: `1px solid ${wash(STATUS.warning, 25)}` }}
             >
               {cargandoDashboard ? (
                 <p className="text-sm text-muted-foreground">Calculando...</p>
@@ -277,7 +278,7 @@ export default function Dashboard() {
                 <div className="flex flex-col sm:flex-row sm:items-center gap-4">
                   <div
                     className="flex items-center justify-center w-12 h-12 rounded-full shrink-0"
-                    style={{ backgroundColor: `${STATUS.warning}26` }}
+                    style={{ backgroundColor: wash(STATUS.warning, 15) }}
                   >
                     <TriangleAlert className="w-6 h-6" style={{ color: STATUS.warning }} />
                   </div>
@@ -401,7 +402,7 @@ export default function Dashboard() {
                       className="rounded-lg p-4"
                       style={
                         esCuelloDeBotella
-                          ? { border: `1px solid ${STATUS.warning}40`, backgroundColor: `${STATUS.warning}14` }
+                          ? { border: `1px solid ${wash(STATUS.warning, 25)}`, backgroundColor: wash(STATUS.warning, 8) }
                           : { border: "1px solid hsl(var(--border))" }
                       }
                     >

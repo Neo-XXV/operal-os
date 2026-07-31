@@ -3,23 +3,52 @@
 // los colores -- mismo criterio que ya se aplico con PeriodoSelector.tsx.
 import { Minus, TrendingUp, TrendingDown } from "lucide-react";
 
-// Paleta dark (skill dataviz, references/palette.md) -- pasos dark de la
-// paleta categorica validada + los colores de status fijos. Se usan tal
-// cual, no se reinventan hex nuevos.
+// Paleta categorica validada (skill dataviz, references/palette.md), leida
+// por variable CSS -- NO hex fijo. Antes esto tenia hardcodeados los pasos
+// OSCUROS y los usaba tambien en modo claro, o sea: en claro los graficos
+// estaban pintados con colores calibrados para fondo oscuro. Ahora cada modo
+// usa sus propios pasos (ver index.css) y el toggle de tema los invierte solo,
+// igual que ya hacia CHROME.
 export const CAT = {
-  blue: "#3987e5",
-  orange: "#d95926",
-  aqua: "#199e70",
-  yellow: "#c98500",
-  magenta: "#d55181",
-  violet: "#9085e9",
-  red: "#e66767",
+  blue: "var(--chart-blue)",
+  orange: "var(--chart-orange)",
+  aqua: "var(--chart-aqua)",
+  yellow: "var(--chart-yellow)",
+  magenta: "var(--chart-magenta)",
+  green: "var(--chart-green)",
+  violet: "var(--chart-violet)",
+  red: "var(--chart-red)",
 };
+
+// Ramp ordinal (una hue, claro->oscuro) para escalas CON orden natural --
+// el embudo A->MS->B->C->D. No aplicar a categorias nominales: ahi va un
+// solo color para todas las barras.
+export const ORDINAL = [
+  "var(--chart-ord-1)",
+  "var(--chart-ord-2)",
+  "var(--chart-ord-3)",
+  "var(--chart-ord-4)",
+  "var(--chart-ord-5)",
+];
+
+// Status: fijo, nunca tematizado, y deliberadamente distinto de los slots
+// categoricos. `critical` antes usaba #e66767, que es el ROJO CATEGORICO
+// oscuro (slot 8) -- un color de serie haciendo de color de estado, que el
+// sistema marca como anti-patron. Ahora apunta al critical real.
 export const STATUS = {
-  warning: "#fab219",
-  critical: "#e66767",
-  good: "#0ca30c",
+  good: "var(--status-good)",
+  warning: "var(--status-warning)",
+  serious: "var(--status-serious)",
+  critical: "var(--status-critical)",
 };
+
+// Version translucida de cualquier color del sistema. Reemplaza al patron
+// viejo de concatenar alpha en hex (`${STATUS.warning}1a`), que dejo de
+// funcionar al pasar los colores a variables CSS. color-mix ademas mantiene
+// el resultado atado al token: si el color cambia por tema, el wash tambien.
+export function wash(color: string, pct: number) {
+  return `color-mix(in srgb, ${color} ${pct}%, transparent)`;
+}
 // Referencias a las variables CSS del tema (no hex fijo) -- el grid y el
 // texto de los ejes tienen que invertirse entre claro/oscuro, a diferencia
 // de los colores categoricos/de status (decorativos, fijos en ambos modos).
@@ -66,7 +95,7 @@ export function CeldaTasa({
       className={`text-right p-3 tabular-nums ${
         resaltada ? "font-semibold" : "text-muted-foreground"
       }`}
-      style={resaltada ? { backgroundColor: `${STATUS.warning}1a`, color: STATUS.warning } : undefined}
+      style={resaltada ? { backgroundColor: wash(STATUS.warning, 10), color: STATUS.warning } : undefined}
       title={
         valor !== null && valor > 1
           ? "Puede superar 100%: cuenta leads que llegaron a esta etapa dentro de este grupo, aunque hayan llegado a la etapa anterior fuera de el (ej. reasignación en el medio)."

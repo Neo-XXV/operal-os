@@ -32,41 +32,110 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* ── Acento de marca (navy) ────────────────────────────────────
+       Solo chrome: nav activo, boton primario, focus ring. NUNCA
+       dentro del area de ploteo de un grafico -- esa regla es lo que
+       mantiene separado "esto es UI" de "esto es dato" (el azul de
+       serie es un hue distinto, medido a dE 19.9-24.6 del navy).
+       -brand      = fondo solido (10.36:1 con texto blanco encima)
+       -brand-ink  = el acento como TINTA (texto/icono)
+       En claro navy sirve para ambos; en oscuro no (ver bloque .dark). */
+    --brand: 224.4 64.3% 32.9%;
+    --brand-foreground: 0 0% 100%;
+    --brand-ink: 224.4 64.3% 32.9%;
+
+    /* ── Paleta categorica de graficos (skill dataviz) ─────────────
+       Pasos CLAROS, calibrados para superficie clara. El bloque .dark
+       define los pasos oscuros: no es un flip automatico, es el mismo
+       set de hues re-esteado para el otro fondo. */
+    --chart-blue: #2a78d6;
+    --chart-orange: #eb6834;
+    --chart-aqua: #1baf7a;
+    --chart-yellow: #eda100;
+    --chart-magenta: #e87ba4;
+    --chart-green: #008300;
+    --chart-violet: #4a3aa7;
+    --chart-red: #e34948;
+
+    /* Ramp ordinal (una sola hue, claro->oscuro) para escalas con
+       orden natural: el embudo A->MS->B->C->D. En claro no arranca
+       mas claro que el paso 250, que es el minimo que clarea 2:1. */
+    --chart-ord-1: #86b6ef;
+    --chart-ord-2: #5598e7;
+    --chart-ord-3: #3987e5;
+    --chart-ord-4: #256abf;
+    --chart-ord-5: #184f95;
+
+    /* ── Status: FIJO, nunca tematizado ──────────────────────────
+       Deliberadamente distinto de los slots categoricos para que un
+       color de estado nunca se haga pasar por una serie. Warning y
+       serious quedan sub-3:1 en claro por diseno: la mitigacion es
+       el par icono + etiqueta, nunca el color solo. */
+    --status-good: #0ca30c;
+    --status-warning: #fab219;
+    --status-serious: #ec835a;
+    --status-critical: #d03b3b;
   }
 
-  /* Paleta dark del dashboard (skill dataviz, references/palette.md: chrome/ink
-     dark + pasos dark de la paleta categorica validada, tinte purpura para el
-     "page plane"). No se usaba en ningun lado antes de esto (sin toggle, sin
-     provider) -- se aplica scoped via className="dark" en el wrapper del
-     Dashboard, no en <html>, asi que no afecta al resto de la app. */
+  /* Modo oscuro -- chrome/ink oscuros de la paleta validada (skill dataviz)
+     sobre gris neutro calido, no el tinte purpura anterior: el purpura pasaba
+     todas las validaciones de contraste, se neutraliza por el principio de
+     sobriedad del rediseno, no porque fallara nada. */
   .dark {
-    --background: 256 42% 6%;
+    --background: 0 0% 5.1%;
     --foreground: 0 0% 100%;
-    --card: 256 32% 11%;
+    --card: 60 2% 10%;
     --card-foreground: 0 0% 100%;
-    --popover: 256 32% 11%;
+    --popover: 60 2% 10%;
     --popover-foreground: 0 0% 100%;
-    --primary: 216 74% 58%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 256 25% 16%;
+    --primary: 0 0% 100%;
+    --primary-foreground: 60 2% 10%;
+    --secondary: 60 2.3% 16.9%;
     --secondary-foreground: 0 0% 100%;
-    --muted: 256 25% 16%;
-    --muted-foreground: 255 12% 62%;
-    --accent: 256 25% 18%;
+    --muted: 60 2.3% 16.9%;
+    --muted-foreground: 45 3.3% 62%;
+    --accent: 60 2.3% 16.9%;
     --accent-foreground: 0 0% 100%;
-    --destructive: 0 70% 68%;
+    --destructive: 0 60% 63%;
     --destructive-foreground: 0 0% 100%;
-    --border: 256 20% 22%;
-    --input: 256 20% 22%;
-    --ring: 216 74% 58%;
-    --sidebar-background: 240 5.9% 10%;
-    --sidebar-foreground: 240 4.8% 95.9%;
-    --sidebar-primary: 224.3 76.3% 48%;
+    --border: 60 2.3% 16.9%;
+    --input: 60 2.3% 16.9%;
+    --ring: 211.7 96.4% 78.4%;
+    --sidebar-background: 0 0% 5.1%;
+    --sidebar-foreground: 55 9.1% 74.1%;
+    --sidebar-primary: 224.4 64.3% 32.9%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
-    --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --sidebar-accent: 60 2.3% 16.9%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 60 2.3% 16.9%;
+    --sidebar-ring: 211.7 96.4% 78.4%;
+
+    /* El navy sigue sirviendo de FONDO solido (texto blanco encima), pero
+       como TINTA sobre superficie oscura da 1.68:1 -- falla. Por eso -ink
+       cambia a #93c5fd (9.66:1), que ademas queda a dE 19.8 del azul de
+       serie oscuro, arriba del piso de separacion de 15. */
+    --brand: 224.4 64.3% 32.9%;
+    --brand-foreground: 0 0% 100%;
+    --brand-ink: 211.7 96.4% 78.4%;
+
+    /* Mismos ocho hues, re-esteados para fondo oscuro. */
+    --chart-blue: #3987e5;
+    --chart-orange: #d95926;
+    --chart-aqua: #199e70;
+    --chart-yellow: #c98500;
+    --chart-magenta: #d55181;
+    --chart-green: #008300;
+    --chart-violet: #9085e9;
+    --chart-red: #e66767;
+
+    /* Ordinal invertido: en oscuro el extremo "mas" es el mas claro, y no
+       baja del paso 600, el minimo que clarea 2:1 contra este fondo. */
+    --chart-ord-1: #184f95;
+    --chart-ord-2: #256abf;
+    --chart-ord-3: #3987e5;
+    --chart-ord-4: #5598e7;
+    --chart-ord-5: #86b6ef;
   }
 }
 

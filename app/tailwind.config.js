@@ -30,6 +30,14 @@ module.exports = {
           DEFAULT: "hsl(var(--accent))",
           foreground: "hsl(var(--accent-foreground))",
         },
+        // Acento de marca (navy). Solo chrome -- nunca dentro de un grafico.
+        // `ink` es la variante para texto/icono: en oscuro NO es el navy
+        // (falla contraste como tinta), ver comentario en index.css.
+        brand: {
+          DEFAULT: "hsl(var(--brand))",
+          foreground: "hsl(var(--brand-foreground))",
+          ink: "hsl(var(--brand-ink))",
+        },
         popover: {
           DEFAULT: "hsl(var(--popover))",
           foreground: "hsl(var(--popover-foreground))",
@@ -58,6 +66,12 @@ module.exports = {
       },
       boxShadow: {
         xs: "0 1px 2px 0 rgb(0 0 0 / 0.05)",
+        // Profundidad en dos niveles (inspiracion de la referencia, sin
+        // glassmorphism): `panel` para tarjetas, `raised` para el elemento
+        // destacado de una vista. Sombras suaves y de bajo contraste --
+        // la profundidad la da la elevacion, no un panel translucido.
+        panel: "0 1px 2px 0 rgb(0 0 0 / 0.04), 0 4px 12px -2px rgb(0 0 0 / 0.06)",
+        raised: "0 2px 4px 0 rgb(0 0 0 / 0.05), 0 12px 28px -6px rgb(0 0 0 / 0.10)",
       },
       keyframes: {
         "accordion-down": {
