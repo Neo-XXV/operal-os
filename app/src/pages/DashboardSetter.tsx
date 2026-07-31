@@ -228,8 +228,8 @@ export default function DashboardSetter() {
             <CardHeader>
               <CardTitle className="text-foreground">Embudo comercial</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Conversión en el período seleccionado — atribuida por intervalo de tiempo (a quién tenía el
-                lead asignado en el momento de cada transición)
+                Conversión en el período seleccionado. Cada paso cuenta para el setter que tenía el lead
+                asignado en ese momento, no para quien lo tiene ahora
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -289,7 +289,7 @@ export default function DashboardSetter() {
           <CardHeader>
             <CardTitle className="text-foreground">Anomalías detectadas</CardTitle>
             <p className="text-sm text-muted-foreground">
-              Registradas automáticamente por el motor de reglas — ver `02_reglas_de_negocio.md` sección 9
+              Se generan solas cuando una tasa de conversión o un tiempo de respuesta se sale de lo esperado
             </p>
           </CardHeader>
           <CardContent>

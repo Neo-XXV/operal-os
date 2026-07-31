@@ -464,8 +464,8 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="text-foreground">Comparación por setter</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Conversión de cada setter en el período seleccionado — cada transición se atribuye a
-                quien tenía el lead asignado en ese momento, no al dueño actual
+                Conversión de cada setter en el período seleccionado. Cada paso cuenta para quien tenía
+                el lead asignado en ese momento, no para el dueño actual
               </p>
             </CardHeader>
             <CardContent>
@@ -531,7 +531,7 @@ export default function Dashboard() {
             <CardHeader>
               <CardTitle className="text-foreground">Comparación por origen</CardTitle>
               <p className="text-sm text-muted-foreground">
-                Qué fuente convierte mejor en el período seleccionado — el origen es fijo desde que se creó el lead
+                Qué fuente convierte mejor en el período seleccionado. El origen de un lead queda fijo desde que se crea
               </p>
             </CardHeader>
             <CardContent>
