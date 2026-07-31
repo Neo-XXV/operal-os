@@ -98,53 +98,149 @@ function AgendaOperal() {
   return (
     <div className="space-y-2">
       {isLoading && <p className="text-sm text-muted-foreground">Cargando agenda...</p>}
+      {/* react-big-calendar trae su CSS pensado para pagina clara y no usa
+          variables, asi que hay que reescribirle el chrome. Todo lo de abajo
+          va con los tokens del tema (sin bloques separados claro/oscuro: los
+          tokens ya cambian solos), y busca que el contraste este en el
+          CONTENIDO y no en los separadores. */}
       <style>{`
-        .operal-calendar .rbc-event { background-color: #2563eb; border-radius: 6px; border: none; }
-        .operal-calendar .rbc-event.rbc-selected { background-color: #1d4ed8; }
-        .operal-calendar .rbc-today { background-color: #eff6ff; }
-        .operal-calendar .rbc-toolbar button { border-radius: 6px; }
-        .operal-calendar .rbc-toolbar button.rbc-active { background-color: #0f172a; color: white; }
+        .operal-calendar { color: hsl(var(--foreground)); }
 
-        /* react-big-calendar trae su propio CSS pensado para pagina clara --
-           no reacciona solo al modo oscuro (no usa variables CSS). Se
-           reescriben los colores de chrome (grillas, bordes, toolbar) con
-           las mismas variables del tema que usa el resto de la app, scoped
-           bajo .dark para no afectar el modo claro. */
-        .dark .operal-calendar { color: hsl(var(--foreground)); }
-        .dark .operal-calendar .rbc-off-range-bg { background-color: hsl(var(--muted) / 0.4); }
-        .dark .operal-calendar .rbc-off-range { color: hsl(var(--muted-foreground)); }
-        .dark .operal-calendar .rbc-today { background-color: hsl(var(--accent)); }
-        .dark .operal-calendar .rbc-header,
-        .dark .operal-calendar .rbc-month-view,
-        .dark .operal-calendar .rbc-time-view,
-        .dark .operal-calendar .rbc-time-header-content,
-        .dark .operal-calendar .rbc-time-content,
-        .dark .operal-calendar .rbc-day-bg,
-        .dark .operal-calendar .rbc-month-row,
-        .dark .operal-calendar .rbc-timeslot-group,
-        .dark .operal-calendar .rbc-time-gutter,
-        .dark .operal-calendar .rbc-time-slot,
-        .dark .operal-calendar .rbc-agenda-view table.rbc-agenda-table {
-          border-color: hsl(var(--border));
+        /* rbc trae bordes #ddd hardcodeados en una docena de clases (el
+           borde izquierdo del header, el derecho del time-view, etc.), que
+           en modo oscuro se ven como lineas blancas. Catch-all sobre todo
+           lo que empiece con rbc-, en :where() para que tenga especificidad
+           0 y las reglas de abajo lo puedan pisar. */
+        .operal-calendar :where([class^="rbc-"], [class*=" rbc-"]) {
+          border-color: hsl(var(--border) / 0.6);
         }
-        .dark .operal-calendar .rbc-header,
-        .dark .operal-calendar .rbc-toolbar-label,
-        .dark .operal-calendar .rbc-date-cell {
-          color: hsl(var(--foreground));
+
+        /* ── Lineas de hora: hairline y mucho mas tenues ──────────────
+           Antes competian con los eventos. La media hora casi desaparece:
+           sirve de guia, no de dato. */
+        .operal-calendar .rbc-time-content,
+        .operal-calendar .rbc-time-view,
+        .operal-calendar .rbc-month-view,
+        .operal-calendar .rbc-agenda-view table.rbc-agenda-table {
+          border-color: hsl(var(--border) / 0.6);
         }
-        .dark .operal-calendar .rbc-toolbar button {
+        .operal-calendar .rbc-timeslot-group { border-color: hsl(var(--border) / 0.5); }
+        /* Este lo declara rbc con dos clases (0,2,0), asi que el catch-all de
+           arriba no le gana: necesita regla propia. */
+        .operal-calendar .rbc-time-header.rbc-overflowing {
+          border-right-color: hsl(var(--border) / 0.6);
+        }
+        .operal-calendar .rbc-time-slot { border-color: hsl(var(--border) / 0.25); }
+        .operal-calendar .rbc-day-bg + .rbc-day-bg,
+        .operal-calendar .rbc-month-row + .rbc-month-row,
+        .operal-calendar .rbc-time-content > * + * > * {
+          border-color: hsl(var(--border) / 0.45);
+        }
+
+        /* ── Header de dias: separado del cuerpo de horas ─────────────
+           Fondo propio, tipografia mas chica en mayusculas y una linea
+           inferior mas marcada que el resto de la grilla. */
+        .operal-calendar .rbc-time-header,
+        .operal-calendar .rbc-month-header {
+          background-color: hsl(var(--muted) / 0.5);
+        }
+        .operal-calendar .rbc-header {
+          padding: 8px 4px;
+          font-size: 11px;
+          font-weight: 600;
+          letter-spacing: 0.04em;
+          text-transform: uppercase;
+          color: hsl(var(--muted-foreground));
+          border-color: hsl(var(--border) / 0.5);
+        }
+        .operal-calendar .rbc-time-header-content,
+        .operal-calendar .rbc-month-header {
+          border-bottom: 1px solid hsl(var(--border));
+        }
+        .operal-calendar .rbc-time-gutter .rbc-timeslot-group {
+          color: hsl(var(--muted-foreground));
+          font-size: 11px;
+        }
+
+        /* ── Dia actual: destacado, no una celda mas ──────────────────
+           Lavado del acento de marca en toda la columna + el numero del
+           dia en una pastilla navy, para que se ubique de un vistazo. */
+        .operal-calendar .rbc-today {
+          background-color: hsl(var(--brand) / 0.07);
+        }
+        .operal-calendar .rbc-header.rbc-today {
+          color: hsl(var(--brand-ink));
+          background-color: hsl(var(--brand) / 0.12);
+        }
+        /* rbc envuelve el numero del dia en <a> o en <button.rbc-button-link>
+           segun la version/config de drilldown -- se cubren los dos. */
+        .operal-calendar .rbc-date-cell.rbc-now > a,
+        .operal-calendar .rbc-date-cell.rbc-now > button {
+          background-color: hsl(var(--brand));
+          color: hsl(var(--brand-foreground));
+          border-radius: 999px;
+          padding: 2px 7px;
+          display: inline-block;
+          font-weight: 600;
+        }
+        .operal-calendar .rbc-current-time-indicator {
+          background-color: hsl(var(--brand-ink));
+          height: 2px;
+        }
+
+        /* ── Eventos: bloques con profundidad, no texto plano ─────────
+           Mismo lenguaje que las tarjetas pero a escala chica: color de
+           serie translucido, borde con brillo, sombra suave y una barra
+           lateral solida que ancla el bloque. */
+        .operal-calendar .rbc-event {
+          background-color: color-mix(in srgb, var(--chart-blue) 82%, transparent);
+          border: 1px solid color-mix(in srgb, var(--chart-blue) 55%, transparent);
+          border-left: 3px solid var(--chart-blue);
+          border-radius: 8px;
+          padding: 2px 6px;
+          font-size: 12px;
+          line-height: 1.35;
+          color: #fff;
+          box-shadow: 0 1px 2px rgb(0 0 0 / 0.10), 0 4px 10px -3px rgb(0 0 0 / 0.18);
+          backdrop-filter: blur(6px);
+          -webkit-backdrop-filter: blur(6px);
+        }
+        .operal-calendar .rbc-event:focus { outline: 2px solid hsl(var(--ring)); outline-offset: 1px; }
+        .operal-calendar .rbc-event.rbc-selected {
+          background-color: var(--chart-blue);
+          box-shadow: 0 2px 4px rgb(0 0 0 / 0.14), 0 8px 18px -4px rgb(0 0 0 / 0.24);
+        }
+        /* Un evento sin sincronizar con Google se distingue por color de
+           serie distinto, no solo por el badge de la lista. */
+        .operal-calendar .rbc-event.evento-sin-sync {
+          background-color: color-mix(in srgb, var(--chart-violet) 82%, transparent);
+          border-color: color-mix(in srgb, var(--chart-violet) 55%, transparent);
+          border-left-color: var(--chart-violet);
+        }
+
+        /* ── Fuera de rango y toolbar ─────────────────────────────────── */
+        .operal-calendar .rbc-off-range-bg { background-color: hsl(var(--muted) / 0.35); }
+        .operal-calendar .rbc-off-range { color: hsl(var(--muted-foreground) / 0.7); }
+        .operal-calendar .rbc-toolbar-label,
+        .operal-calendar .rbc-date-cell { color: hsl(var(--foreground)); }
+        .operal-calendar .rbc-toolbar button {
+          border-radius: 8px;
           color: hsl(var(--foreground));
           border-color: hsl(var(--border));
           background-color: hsl(var(--card));
         }
-        .dark .operal-calendar .rbc-toolbar button:hover { background-color: hsl(var(--accent)); }
-        .dark .operal-calendar .rbc-toolbar button.rbc-active {
-          background-color: hsl(var(--primary));
-          color: hsl(var(--primary-foreground));
+        .operal-calendar .rbc-toolbar button:hover { background-color: hsl(var(--accent)); }
+        .operal-calendar .rbc-toolbar button.rbc-active,
+        .operal-calendar .rbc-toolbar button.rbc-active:hover {
+          background-color: hsl(var(--brand));
+          color: hsl(var(--brand-foreground));
+          border-color: hsl(var(--brand));
         }
-        .dark .operal-calendar .rbc-show-more { color: hsl(var(--primary)); background-color: transparent; }
+        .operal-calendar .rbc-show-more { color: hsl(var(--brand-ink)); background-color: transparent; }
       `}</style>
-      <div className="operal-calendar" style={{ height: 650 }}>
+      {/* La grilla vive sobre un panel glass: sobre el fondo plano, sin panel
+          debajo, la grilla queda flotando sin borde de contencion. */}
+      <div className="operal-calendar glass rounded-2xl p-3" style={{ height: 650 }}>
         <BigCalendar
           localizer={localizer}
           culture="es"
@@ -156,8 +252,10 @@ function AgendaOperal() {
           onView={setVista}
           onRangeChange={handleRangeChange}
           onSelectEvent={(event) => navigate(`/leads/${event.resource.leadId}`)}
+          // Clase, no style inline: el estilo inline le gana a la regla CSS del
+          // bloque de arriba y dejaria el bloque plano, sin borde ni sombra.
           eventPropGetter={(event) => ({
-            style: event.resource.googleEventId ? undefined : { backgroundColor: "#94a3b8" },
+            className: event.resource.googleEventId ? undefined : "evento-sin-sync",
           })}
           messages={{
             next: "Sig.",
@@ -172,7 +270,10 @@ function AgendaOperal() {
         />
       </div>
       <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-slate-400" />
+        <span
+          className="inline-block w-2.5 h-2.5 rounded-sm"
+          style={{ backgroundColor: "var(--chart-violet)" }}
+        />
         Sin sincronizar con Google
       </p>
     </div>
