@@ -228,23 +228,21 @@ function TablaSetter() {
       </div>
 
       {/* Fila rapida de carga */}
-      <Card>
-        <CardContent className="p-3">
-          <form onSubmit={handleQuickAdd} className="flex items-center gap-2">
-            <Input
-              autoFocus
-              placeholder="Pegar username de Instagram y Enter..."
-              value={quickUsername}
-              onChange={(e) => setQuickUsername(e.target.value)}
-              disabled={createLead.isPending}
-            />
-            <Button type="submit" disabled={!quickUsername.trim() || createLead.isPending}>
-              <Plus className="w-4 h-4 mr-2" />
-              {createLead.isPending ? "Creando..." : "Iniciar"}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
+      <div className="glass rounded-2xl p-3">
+        <form onSubmit={handleQuickAdd} className="flex items-center gap-2">
+          <Input
+            autoFocus
+            placeholder="Pegar username de Instagram y Enter..."
+            value={quickUsername}
+            onChange={(e) => setQuickUsername(e.target.value)}
+            disabled={createLead.isPending}
+          />
+          <Button type="submit" disabled={!quickUsername.trim() || createLead.isPending}>
+            <Plus className="w-4 h-4 mr-2" />
+            {createLead.isPending ? "Creando..." : "Iniciar"}
+          </Button>
+        </form>
+      </div>
 
       {/* Busqueda + filtro + accion de lote */}
       <div className="flex flex-col sm:flex-row gap-2">
@@ -277,8 +275,8 @@ function TablaSetter() {
         )}
       </div>
 
-      <Card>
-        <CardContent className="p-0">
+      <div className="glass rounded-2xl overflow-hidden">
+        <div className="p-0">
           {isLoading ? (
             <div className="p-8 text-center text-muted-foreground">Cargando...</div>
           ) : filtered.length === 0 ? (
@@ -291,7 +289,7 @@ function TablaSetter() {
             <div className="overflow-x-auto">
               <table className="w-full text-sm">
                 <thead>
-                  <tr className="border-b border-border bg-muted/50">
+                  <tr className="border-b border-border/70 bg-foreground/[0.03]">
                     <th className="w-10 p-3"></th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Nombre</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Instagram</th>
@@ -307,7 +305,7 @@ function TablaSetter() {
                   {filtered.map((lead) => {
                     const siguiente = lead.etapaActual ? SIGUIENTE_ETAPA[lead.etapaActual] : undefined;
                     return (
-                      <tr key={lead.id} className="border-b border-border hover:bg-muted/50">
+                      <tr key={lead.id} className="border-b border-border/40 hover:bg-foreground/[0.04]">
                         <td className="p-3">
                           <Checkbox
                             checked={selected.has(lead.id)}
@@ -399,8 +397,8 @@ function TablaSetter() {
               </table>
             </div>
           )}
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
