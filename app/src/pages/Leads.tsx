@@ -38,7 +38,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Card, CardContent } from "@/components/ui/card";
 import { Plus, Search, ExternalLink, ArrowRight, XCircle, UserCog } from "lucide-react";
 
 const MOTIVOS_DESCARTE = [
@@ -570,22 +569,20 @@ function VistaAdmin() {
           Cargando leads...
         </div>
       ) : !filteredLeads || filteredLeads.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center text-muted-foreground">
-            {search
-              ? "No se encontraron leads con ese criterio"
-              : "No hay leads registrados"}
-          </CardContent>
-        </Card>
+        <div className="glass rounded-2xl py-12 text-center text-muted-foreground">
+          {search
+            ? "No se encontraron leads con ese criterio"
+            : "No hay leads registrados"}
+        </div>
       ) : (
         <div className="space-y-3">
           {filteredLeads.map((lead) => (
-            <Card
+            <div
               key={lead.id}
-              className="hover:shadow-md transition-shadow cursor-pointer"
+              className="glass rounded-2xl cursor-pointer transition-shadow hover:shadow-lg"
               onClick={() => navigate(`/leads/${lead.id}`)}
             >
-              <CardContent className="p-4">
+              <div className="p-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-4">
                     <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-bold text-muted-foreground">
@@ -660,8 +657,8 @@ function VistaAdmin() {
                     <ExternalLink className="w-4 h-4 text-muted-foreground/50" />
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
       )}
