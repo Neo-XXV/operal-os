@@ -1,0 +1,80 @@
+# Config de deploy para Railway. TOML en vez de railway.json a proposito:
+# los dos formatos son equivalentes para Railway, pero TOML admite
+# comentarios y JSON no -- y el punto 3 de este archivo (recuperacion de una
+# migracion a medio aplicar) necesita quedar documentado ACA, no en un doc
+# aparte que nadie va a leer en el momento de un incidente real.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+# El comando de arranque normal del servicio -- corre DESPUES de que el
+# release step (abajo) haya terminado con exito.
+startCommand = "npm run start"
+
+# ─── Release step: migraciones automaticas, antes de recibir trafico ──────
+#
+# Railway corre este comando UNA VEZ por deploy, contra la imagen recien
+# construida, ANTES de promoverla a recibir trafico. Es el mismo mecanismo
+# que Heroku llama "release phase": si el comando termina con exit code
+# distinto de cero, Railway marca el deploy como FALLIDO y NO reemplaza la
+# version que esta sirviendo ahora -- la version vieja sigue atendiendo
+# trafico sin interrupcion. Esto se VERIFICO de forma empirica antes de
+# escribir este archivo (no se asumio): se corrio `drizzle-kit migrate`
+# contra una base con una tabla deliberadamente incompatible para forzar un
+# fallo real, y devolvio exit code 1 -- el codigo de salida es la unica
+# senal que Railway usa para decidir si promueve el release, no parsea
+# stdout ni busca texto de error.
+releaseCommand = "npm run db:migrate"
+
+# ─── Si una migracion queda a medio aplicar (recuperacion manual) ─────────
+#
+# Riesgo real: BAJO. Las migraciones de este proyecto son aditivas por
+# diseño (ALTER TABLE ... MODIFY COLUMN para agregar valores a un enum,
+# CREATE TABLE nuevas -- nunca DROP ni tocan datos existentes, ver
+# db/migrations/ y los comentarios de cada .sql). El escenario de "a medio
+# aplicar" solo pasa si un archivo de migracion con VARIAS sentencias falla
+# en la sentencia N despues de haber aplicado con exito las 1..N-1 --
+# MySQL no envuelve DDL en una transaccion, asi que cada CREATE TABLE /
+# ALTER TABLE que ya corrio queda commiteado aunque el resto del archivo
+# falle despues.
+#
+# Confirmado en una prueba real (DB descartable, no la de produccion):
+# 1. Se forzo el fallo de 0000_baseline_sprint4.sql precreando una tabla
+#    `leads` incompatible. La migracion creo `eventos` OK, fallo en
+#    `leads` ("table already exists"), exit code 1, y NUNCA llego a crear
+#    `users` ni `google_calendar_connections` (estaban despues en el
+#    archivo).
+# 2. La tabla __drizzle_migrations (donde drizzle-kit registra que
+#    migraciones ya corrieron) NO registro la migracion fallida -- quedo
+#    vacia.
+# 3. Reintentar `npm run db:migrate` tal cual falla de nuevo, siempre --
+#    drizzle-kit vuelve a intentar 0000_baseline_sprint4.sql desde el
+#    principio (no esta marcada como aplicada) y choca otra vez con
+#    `eventos` ya existente ("table already exists"). No hay forma de que
+#    un reintento ciego resuelva esto solo.
+#
+# Pasos para recuperar (requiere acceso directo a la base de Railway):
+#   a. Conectarse a la base (Railway da un connection string en el
+#      dashboard del plugin de MySQL) y correr:
+#        SELECT * FROM __drizzle_migrations ORDER BY created_at DESC;
+#      Eso dice cual fue la ULTIMA migracion que SI se registro completa.
+#      Todo lo que este despues de esa, en db/migrations/meta/_journal.json,
+#      es sospechoso de estar a medio aplicar.
+#   b. Mirar el .sql de la migracion sospechosa y, tabla por tabla /
+#      ALTER por ALTER, chequear a mano cual de esas sentencias ya corrio
+#      contra la base real (SHOW TABLES, SHOW COLUMNS, etc.) y cual no.
+#   c. Terminar de aplicar a mano lo que falta de ESA migracion puntual
+#      (copiando las sentencias sueltas del .sql que todavia no corrieron),
+#      o si el estado quedo raro, hacer DROP de lo que esa migracion
+#      alcanzo a crear para volver al estado limpio anterior.
+#   d. Insertar manualmente la fila correspondiente en __drizzle_migrations
+#      (mismo hash/tag que usa el archivo en meta/_journal.json) para que
+#      drizzle-kit la de por aplicada y no la reintente.
+#   e. Volver a disparar el deploy (o correr `npm run db:migrate` a mano
+#      con el DATABASE_URL de produccion) para que corran las migraciones
+#      siguientes, si las hubiera.
+# Antes de tocar nada de esto en una base con datos reales: backup primero
+# (mismo criterio que ya usa este proyecto para cualquier cambio de
+# schema, ver CLAUDE.md).

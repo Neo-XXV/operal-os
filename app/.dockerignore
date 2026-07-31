@@ -3,3 +3,19 @@ dist
 .git
 *.swp
 *.log
+
+# Secretos reales -- NUNCA deben entrar al contexto de build. Sin esto, un
+# COPY . . del Dockerfile mandaria .env (credenciales reales) a la imagen
+# aunque el Dockerfile no lo referencie explicitamente. .env.example queda
+# afuera de este patron a proposito: no tiene secretos, es documentacion.
+.env
+.env.local
+.env.*.local
+
+# No hace falta en la imagen, y evita invalidar la cache de Docker por
+# cambios que no afectan el build (coverage, node_modules de test, etc.)
+coverage
+.nyc_output
+.vscode
+.idea
+*.tsbuildinfo
