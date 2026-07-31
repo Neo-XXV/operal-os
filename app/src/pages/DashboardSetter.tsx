@@ -29,7 +29,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { STATUS, TRANSICIONES, ETAPAS_TASA, formatPct, wash } from "@/lib/embudoDisplay";
-import { Medidor } from "@/components/charts/Medidor";
+import { Medidor, severidad } from "@/components/charts/Medidor";
 import { MiniEmbudo } from "@/components/charts/MiniEmbudo";
 // Mismos umbrales reales que usa el ejecutivo y el motor de reglas.
 import { ANOMALIA_CONFIG } from "@contracts/anomaliaConfig";
@@ -283,14 +283,30 @@ export default function DashboardSetter() {
                 {anomalias.map((a) => {
                   const esTiempo = (a.payload as { tipo_anomalia: string }).tipo_anomalia.startsWith("TIEMPO_");
                   const label = ANOMALIA_LABELS[(a.payload as { tipo_anomalia: string }).tipo_anomalia] ?? (a.payload as { tipo_anomalia: string }).tipo_anomalia;
+                  // Conversion: misma severidad() que pinta el Medidor de arriba
+                  // para esta transicion -- una anomalia YA cruzo el umbral, asi
+                  // que en la practica da "critical" salvo el caso tasa_medida
+                  // null. Tiempo: no hay una tasa 0..1 que comparar contra un
+                  // umbral/objetivo (es horas transcurridas), asi que hoy no
+                  // existe una escala de severidad de la que este color pueda
+                  // divergir -- se sostiene STATUS.warning.
+                  const color = esTiempo
+                    ? STATUS.warning
+                    : STATUS[
+                        severidad(
+                          (a.payload as AnomaliaConversion).tasa_medida,
+                          (a.payload as AnomaliaConversion).umbral_anomalia,
+                          (a.payload as AnomaliaConversion).objetivo,
+                        )
+                      ];
                   return (
                     <div
                       key={a.id}
                       className="glass rounded-2xl p-4 flex items-start justify-between gap-4"
-                      style={{ borderColor: wash(STATUS.warning, 35) }}
+                      style={{ borderColor: wash(color, 35) }}
                     >
                       <div className="flex items-start gap-3">
-                        <TriangleAlert className="w-4 h-4 mt-0.5 shrink-0" style={{ color: STATUS.warning }} />
+                        <TriangleAlert className="w-4 h-4 mt-0.5 shrink-0" style={{ color }} />
                         <div>
                           <p className="text-sm font-semibold text-foreground">{label}</p>
                           {esTiempo ? (

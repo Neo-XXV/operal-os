@@ -39,7 +39,7 @@ function escala(umbral: number, objetivo?: number | null) {
   return techo * 1.35;
 }
 
-function severidad(valor: number | null, umbral: number, objetivo?: number | null): "good" | "warning" | "critical" {
+export function severidad(valor: number | null, umbral: number, objetivo?: number | null): "good" | "warning" | "critical" {
   if (valor === null) return "warning";
   if (valor < umbral) return "critical";
   if (objetivo != null && valor < objetivo) return "warning";
