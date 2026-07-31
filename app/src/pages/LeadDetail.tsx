@@ -465,7 +465,10 @@ export default function LeadDetail() {
         {/* Lead header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="w-14 h-14 rounded-full bg-primary flex items-center justify-center text-xl font-bold text-primary-foreground">
+            {/* bg-muted, no bg-primary: mismo avatar neutro que Leads.tsx y
+                el selector de setter -- bg-primary era el chrome default de
+                shadcn, sin relacion con el navy de marca del rediseno. */}
+            <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center text-xl font-bold text-muted-foreground">
               {lead.nombre.charAt(0).toUpperCase()}
             </div>
             <div>
@@ -740,7 +743,7 @@ export default function LeadDetail() {
               <div className="space-y-2">
                 <h3 className="text-sm font-semibold text-foreground">Pagos registrados</h3>
                 {pagos.map((ev) => (
-                  <div key={ev.id} className="flex items-center justify-between text-sm bg-muted/50 rounded-lg px-3 py-2">
+                  <div key={ev.id} className="flex items-center justify-between text-sm glass rounded-xl px-3 py-2">
                     <span className="font-medium text-foreground">
                       {formatUSD(ev.payload.monto)} — {ev.payload.fecha_pago}
                     </span>
