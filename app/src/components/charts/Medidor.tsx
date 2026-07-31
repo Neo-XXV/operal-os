@@ -1,4 +1,4 @@
-import { STATUS, formatPct, wash } from "@/lib/embudoDisplay";
+import { CAT, STATUS, formatPct, wash } from "@/lib/embudoDisplay";
 
 // Medidor: "una razon contra su limite" (skill dataviz, choosing-a-form).
 // Es la forma correcta para tasa-vs-umbral -- un donut de 2 gajos para lo
@@ -15,8 +15,14 @@ export type MedidorProps = {
   label: string;
   /** Tasa 0..1, o null si no hay denominador. */
   valor: number | null;
-  /** Por debajo de esto el motor de reglas lo marca como anomalia. */
-  umbral: number;
+  /**
+   * Por debajo de esto el motor de reglas lo marca como anomalia. OPCIONAL:
+   * hay razones que el sistema muestra pero para las que no define ningun
+   * limite (Close Rate, Show Up Rate). Sin umbral el medidor cae a escala
+   * 0-100% y color NEUTRO -- los colores de status significan bueno/malo, y
+   * sin un limite contra el cual comparar no hay bueno ni malo que afirmar.
+   */
+  umbral?: number;
   /** Objetivo del negocio (opcional; se dibuja como marca en el riel). */
   objetivo?: number | null;
   /** Numerador/denominador reales, para no mostrar un % sin volumen. */
@@ -41,12 +47,14 @@ function severidad(valor: number | null, umbral: number, objetivo?: number | nul
 }
 
 export function Medidor({ label, valor, umbral, objetivo, conteo, descripcion }: MedidorProps) {
-  const max = escala(umbral, objetivo);
-  const estado = severidad(valor, umbral, objetivo);
-  const color = STATUS[estado];
+  const sinUmbral = umbral === undefined;
+  // Sin umbral la escala es la razon completa (0-100%): el "limite" pasa a
+  // ser el maximo posible, que es lo unico honesto que se puede afirmar.
+  const max = sinUmbral ? 1 : escala(umbral, objetivo);
+  const color = sinUmbral ? CAT.blue : STATUS[severidad(valor, umbral, objetivo)];
 
   const pctBarra = valor === null ? 0 : Math.min(100, (valor / max) * 100);
-  const pctUmbral = Math.min(100, (umbral / max) * 100);
+  const pctUmbral = sinUmbral ? null : Math.min(100, (umbral / max) * 100);
   const pctObjetivo = objetivo != null ? Math.min(100, (objetivo / max) * 100) : null;
 
   return (
@@ -66,11 +74,13 @@ export function Medidor({ label, valor, umbral, objetivo, conteo, descripcion }:
         />
         {/* Marcas de umbral y objetivo: hairline del color de superficie, que
             corta el riel sin sumar tinta de dato. */}
-        <span
-          className="absolute inset-y-0 w-0.5 bg-[hsl(var(--glass))]"
-          style={{ left: `${pctUmbral}%` }}
-          aria-hidden="true"
-        />
+        {pctUmbral !== null && (
+          <span
+            className="absolute inset-y-0 w-0.5 bg-[hsl(var(--glass))]"
+            style={{ left: `${pctUmbral}%` }}
+            aria-hidden="true"
+          />
+        )}
         {pctObjetivo !== null && (
           <span
             className="absolute -inset-y-1 w-0.5 bg-foreground/40"
@@ -85,8 +95,9 @@ export function Medidor({ label, valor, umbral, objetivo, conteo, descripcion }:
           {conteo ? `${conteo.num}/${conteo.den}` : " "}
         </span>
         <span className="tabular-nums">
-          umbral {formatPct(umbral)}
-          {objetivo != null && ` · objetivo ${formatPct(objetivo)}`}
+          {sinUmbral
+            ? "sin umbral definido"
+            : `umbral ${formatPct(umbral)}${objetivo != null ? ` · objetivo ${formatPct(objetivo)}` : ""}`}
         </span>
       </div>
 

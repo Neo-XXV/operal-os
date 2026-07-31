@@ -20,7 +20,7 @@ export default function Llamadas() {
 
   return (
     <Layout>
-      <div className="-m-6 p-6 min-h-[calc(100vh-1px)] bg-background text-foreground space-y-6">
+      <div className="-m-6 p-6 min-h-[calc(100vh-1px)] text-foreground space-y-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Llamadas</h1>
           <p className="text-muted-foreground mt-1">
