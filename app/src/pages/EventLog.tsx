@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Layout } from "@/components/Layout";
 import { trpc } from "@/providers/trpc";
-import { Card, CardContent } from "@/components/ui/card";
+import { GlassPanel as Card, GlassPanelContent as CardContent } from "@/components/GlassPanel";
 import {
   Select,
   SelectContent,

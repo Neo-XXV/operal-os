@@ -14,7 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Card, CardContent } from "@/components/ui/card";
+import { GlassPanel as Card, GlassPanelContent as CardContent } from "@/components/GlassPanel";
 import {
   Dialog,
   DialogContent,
