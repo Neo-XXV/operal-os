@@ -22,7 +22,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { ArrowLeft, Plus, Send, MessageSquare, AlertTriangle, StickyNote, XCircle, CalendarDays } from "lucide-react";
+import { ArrowLeft, Plus, Send, MessageSquare, AlertTriangle, StickyNote, XCircle, CalendarDays, Video } from "lucide-react";
 import { toast } from "sonner";
 
 type LlamadaPayload = {
@@ -46,6 +46,7 @@ type CalendarEventoPayload = {
   fecha_hora_inicio: string;
   fecha_hora_fin: string;
   titulo?: string;
+  enlace?: string;
 };
 
 function hoyISO() {
@@ -152,12 +153,27 @@ export default function LeadDetail() {
     ? (calendarVigenteEv.payload as CalendarEventoPayload)
     : null;
 
+  // enlace, a diferencia de titulo, SI se repite en cada
+  // CALENDAR_EVENTO_ACTUALIZADO (editable en cada edicion, ver
+  // docs/03_catalogo_eventos.md evento 12) -- pero CALENDAR_EVENTO_SINCRONIZADO
+  // nunca lo carga en su payload. Si el vigente es un SINCRONIZADO, leer
+  // calendarVigente.enlace directo perderia el link aunque exista; se busca
+  // el mas reciente entre CREADO/ACTUALIZADO especificamente, mismo criterio
+  // que usa el backend en listarEventosLocales.
+  const enlaceVigenteEv = (timeline ?? []).find(
+    (ev) => ev.tipo === "CALENDAR_EVENTO_CREADO" || ev.tipo === "CALENDAR_EVENTO_ACTUALIZADO",
+  );
+  const enlaceVigente = enlaceVigenteEv
+    ? (enlaceVigenteEv.payload as CalendarEventoPayload).enlace
+    : undefined;
+
   const [calendarOpen, setCalendarOpen] = useState(false);
   const [tituloCalendar, setTituloCalendar] = useState("");
   const [fechaCalendar, setFechaCalendar] = useState(hoyISO());
   const [horaInicioCalendar, setHoraInicioCalendar] = useState("15:00");
   const [horaFinCalendar, setHoraFinCalendar] = useState("15:30");
   const [emailCalendar, setEmailCalendar] = useState("");
+  const [enlaceCalendar, setEnlaceCalendar] = useState("");
   const [errorCalendar, setErrorCalendar] = useState("");
 
   const abrirDialogCalendar = () => {
@@ -167,11 +183,13 @@ export default function LeadDetail() {
       setFechaCalendar(inicio.fecha);
       setHoraInicioCalendar(inicio.hora);
       setHoraFinCalendar(fin.hora);
+      setEnlaceCalendar(enlaceVigente ?? "");
     } else {
       setTituloCalendar(`Llamada con ${lead?.nombre || "el lead"}`);
       setFechaCalendar(hoyISO());
       setHoraInicioCalendar("15:00");
       setHoraFinCalendar("15:30");
+      setEnlaceCalendar("");
     }
     setEmailCalendar(lead?.email ?? "");
     setErrorCalendar("");
@@ -215,11 +233,22 @@ export default function LeadDetail() {
   const handleSubmitCalendar = (e: React.FormEvent) => {
     e.preventDefault();
     setErrorCalendar("");
+
+    // Validacion de UX -- la real (esquema + solo http/https, contra el
+    // vector de "javascript:" en el href) es del lado del servidor
+    // (calendar.ts, enlaceSchema). Esto solo evita el viaje de red con un
+    // error obvio.
+    const enlace = enlaceCalendar.trim();
+    if (enlace && !/^https?:\/\//i.test(enlace)) {
+      setErrorCalendar("El enlace debe empezar con http:// o https://");
+      return;
+    }
+
     const fechaHoraInicio = new Date(`${fechaCalendar}T${horaInicioCalendar}`).toISOString();
     const fechaHoraFin = new Date(`${fechaCalendar}T${horaFinCalendar}`).toISOString();
 
     if (calendarVigente) {
-      editarCalendar.mutate({ leadId, fechaHoraInicio, fechaHoraFin });
+      editarCalendar.mutate({ leadId, fechaHoraInicio, fechaHoraFin, enlace: enlace || undefined });
     } else {
       crearCalendar.mutate({
         leadId,
@@ -227,6 +256,7 @@ export default function LeadDetail() {
         fechaHoraFin,
         titulo: tituloCalendar || `Llamada con ${lead?.nombre || "el lead"}`,
         email: emailCalendar || undefined,
+        enlace: enlace || undefined,
       });
     }
   };
@@ -434,6 +464,18 @@ export default function LeadDetail() {
             </p>
           </div>
         )}
+        <div className="space-y-2">
+          <Label>Enlace de la llamada (opcional)</Label>
+          <Input
+            type="url"
+            placeholder="https://meet.google.com/..."
+            value={enlaceCalendar}
+            onChange={(e) => setEnlaceCalendar(e.target.value)}
+          />
+          <p className="text-xs text-muted-foreground">
+            Link de Meet/Zoom/etc. A diferencia del titulo, se puede cambiar en cada edicion.
+          </p>
+        </div>
         {errorCalendar && (
           <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">{errorCalendar}</p>
         )}
@@ -537,7 +579,7 @@ export default function LeadDetail() {
                   </p>
                 ) : calendarVigente ? (
                   <>
-                    <div className="flex items-center gap-2 text-sm text-foreground">
+                    <div className="flex items-center gap-2 text-sm text-foreground flex-wrap">
                       <CalendarDays className="w-4 h-4 text-muted-foreground" />
                       {formatFechaHoraCorta(calendarVigente.fecha_hora_inicio)} —{" "}
                       {formatFechaHoraCorta(calendarVigente.fecha_hora_fin)}
@@ -545,6 +587,20 @@ export default function LeadDetail() {
                         <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground">
                           Sin sincronizar
                         </span>
+                      )}
+                      {/* href ya paso enlaceSchema en el backend (solo
+                          http/https) al guardarse -- texto plano, React lo
+                          escapa por defecto, nunca dangerouslySetInnerHTML. */}
+                      {enlaceVigente && (
+                        <a
+                          href={enlaceVigente}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:underline"
+                        >
+                          <Video className="w-3.5 h-3.5" />
+                          Unirse a la llamada
+                        </a>
                       )}
                     </div>
                     <div className="flex gap-2">

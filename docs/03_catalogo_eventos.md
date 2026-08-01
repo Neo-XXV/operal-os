@@ -326,7 +326,8 @@ Taxonomía cerrada (definida con el dueño del negocio):
   "fecha_hora_inicio": "2026-08-03T15:00:00-03:00",
   "fecha_hora_fin": "2026-08-03T15:30:00-03:00",
   "titulo": "texto libre",
-  "invitados": ["lead@email.com"]
+  "invitados": ["lead@email.com"],
+  "enlace": "https://meet.google.com/abc-defg-hij"
 }
 ```
 
@@ -334,6 +335,7 @@ Taxonomía cerrada (definida con el dueño del negocio):
 - `calendar_id`: **opcional**, solo presente si `google_event_id` también lo está.
 - `fecha_hora_inicio`/`fecha_hora_fin`: con hora y zona horaria (a diferencia de `fecha_call`/`fecha_pago`, que son fecha sin hora) — un evento de calendario necesita el horario exacto. Esta es la fecha que alimenta cualquier cálculo que dependa de "cuándo es/fue la llamada" (p. ej. tiempos entre C y D) — se lee directo de acá, nunca de Google.
 - `invitados`: opcional, lista de emails a los que se les envía la notificación de Google (solo aplica si hay `google_event_id`).
+- `enlace`: **opcional** (`string`). Link de la llamada (ej. Google Meet/Zoom). Debe ser una URL `http://`/`https://` válida — se valida al guardar, nunca se envía a Google (no se escribe en el evento real de Calendar, es una limitación aceptada de esta versión). A diferencia de `titulo`/`invitados`, que solo viven acá, `enlace` se repite en el evento 12 (`CALENDAR_EVENTO_ACTUALIZADO`) — es editable en cada corrección, no fijo desde la creación.
 
 **Reglas:**
 - ❌ **Solo puede crearse si la etapa actual del lead es `C` o `D`.** Un lead en `A`, `MS` o `B` rechaza el intento.
@@ -359,11 +361,13 @@ Taxonomía cerrada (definida con el dueño del negocio):
 {
   "google_event_id": "abc123xyz",
   "fecha_hora_inicio": "2026-08-05T16:00:00-03:00",
-  "fecha_hora_fin": "2026-08-05T16:30:00-03:00"
+  "fecha_hora_fin": "2026-08-05T16:30:00-03:00",
+  "enlace": "https://meet.google.com/abc-defg-hij"
 }
 ```
 
 - `google_event_id`: **opcional** (`string | null`), mismo criterio que en el evento 11 — puede quedar en `null` si no hay conexión o si Google falla al momento de editar.
+- `enlace`: **opcional** (`string`), mismo formato y validación que en el evento 11. Se manda de nuevo en cada edición (como `fecha_hora_inicio`/`fecha_hora_fin`) — el formulario de edición precarga el enlace vigente, así que "no tocarlo" al reagendar lo deja igual.
 
 **Reglas:**
 - ❌ Solo puede editarse el evento de Calendar **vigente** de un lead cuya etapa actual sea `C` o `D`.

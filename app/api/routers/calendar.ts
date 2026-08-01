@@ -19,7 +19,20 @@ type CalendarEventoPayload = {
   fecha_hora_fin: string;
   titulo?: string;
   invitados?: string[];
+  enlace?: string;
 };
+
+// Solo http(s) -- .url() de zod por si solo acepta cualquier esquema con
+// forma de URL valida, incluido "javascript:alert(1)". Sin este refine, un
+// enlace malicioso pasaria la validacion y quedaria guardado como href
+// clickeable (ver el render en el frontend, que confia en que este check ya
+// paso). Ver docs/03_catalogo_eventos.md eventos 11 y 12.
+const enlaceSchema = z
+  .string()
+  .trim()
+  .url("El enlace no es una URL valida")
+  .refine((v) => /^https?:\/\//i.test(v), "El enlace debe empezar con http:// o https://")
+  .optional();
 
 // Sprint 5b: el evento local es el canonico -- vive siempre en el payload de
 // CALENDAR_EVENTO_CREADO/ACTUALIZADO/SINCRONIZADO, nunca en una tabla aparte.
@@ -125,6 +138,7 @@ export const calendarRouter = createRouter({
         fechaHoraFin: z.string(),
         titulo: z.string().min(1),
         email: z.string().email().optional(),
+        enlace: enlaceSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -183,6 +197,7 @@ export const calendarRouter = createRouter({
           fecha_hora_fin: fin.toISOString(),
           titulo: input.titulo,
           invitados,
+          enlace: input.enlace,
         },
       } as any);
 
@@ -195,6 +210,7 @@ export const calendarRouter = createRouter({
         leadId: z.number(),
         fechaHoraInicio: z.string(),
         fechaHoraFin: z.string(),
+        enlace: enlaceSchema,
       }),
     )
     .mutation(async ({ ctx, input }) => {
@@ -249,6 +265,7 @@ export const calendarRouter = createRouter({
           google_event_id: googleEventId,
           fecha_hora_inicio: inicio.toISOString(),
           fecha_hora_fin: fin.toISOString(),
+          enlace: input.enlace,
         },
       } as any);
 
@@ -325,10 +342,21 @@ export const calendarRouter = createRouter({
 
       const vigentePorLead = new Map<number, (typeof todos)[number]>();
       const creacionPorLead = new Map<number, { titulo?: string }>();
+      // enlace vigente = el mas reciente entre CREADO/ACTUALIZADO (nunca
+      // SINCRONIZADO, que no lo carga en su payload -- ver evento 12,
+      // docs/03_catalogo_eventos.md). Resuelto en memoria sobre la lista que
+      // ya se trajo completa arriba, para no hacer una query extra por lead.
+      const enlacePorLead = new Map<number, string | undefined>();
       for (const ev of todos) {
         if (!vigentePorLead.has(ev.leadId)) vigentePorLead.set(ev.leadId, ev);
         if (ev.tipo === "CALENDAR_EVENTO_CREADO" && !creacionPorLead.has(ev.leadId)) {
           creacionPorLead.set(ev.leadId, { titulo: (ev.payload as CalendarEventoPayload).titulo });
+        }
+        if (
+          (ev.tipo === "CALENDAR_EVENTO_CREADO" || ev.tipo === "CALENDAR_EVENTO_ACTUALIZADO") &&
+          !enlacePorLead.has(ev.leadId)
+        ) {
+          enlacePorLead.set(ev.leadId, (ev.payload as CalendarEventoPayload).enlace);
         }
       }
 
@@ -353,6 +381,7 @@ export const calendarRouter = createRouter({
         fechaHoraInicio: string;
         fechaHoraFin: string;
         googleEventId: string | null;
+        enlace: string | null;
       }[] = [];
       for (const ev of vigentePorLead.values()) {
         if (!ev.lead || leadsDescartados.has(ev.leadId)) continue;
@@ -366,6 +395,7 @@ export const calendarRouter = createRouter({
           fechaHoraInicio: payload.fecha_hora_inicio,
           fechaHoraFin: payload.fecha_hora_fin,
           googleEventId: payload.google_event_id,
+          enlace: enlacePorLead.get(ev.leadId) ?? null,
         });
       }
       return resultado;

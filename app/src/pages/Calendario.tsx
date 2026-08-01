@@ -6,7 +6,7 @@ import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { GlassPanel as Card, GlassPanelContent as CardContent } from "@/components/GlassPanel";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { CalendarDays, CheckCircle2, XCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { CalendarDays, CheckCircle2, XCircle, ChevronLeft, ChevronRight, Video } from "lucide-react";
 import { toast } from "sonner";
 import { format, parse, startOfWeek, startOfMonth, endOfMonth, getDay } from "date-fns";
 import { es } from "date-fns/locale";
@@ -46,8 +46,32 @@ type EventoLocalCalendario = {
   title: string;
   start: Date;
   end: Date;
-  resource: { leadId: number; leadNombre: string; googleEventId: string | null };
+  resource: { leadId: number; leadNombre: string; googleEventId: string | null; enlace: string | null };
 };
+
+// Render custom del bloque de evento -- agrega el icono de enlace (si el
+// evento tiene uno) sin reemplazar el click normal del bloque (que navega
+// al lead, ver onSelectEvent). stopPropagation en el <a> para que clickear
+// el icono abra el link en pestaña nueva en vez de disparar esa navegacion.
+function EventoConEnlace({ event }: { event: EventoLocalCalendario }) {
+  return (
+    <span className="flex items-center gap-1 min-w-0">
+      <span className="truncate flex-1 min-w-0">{event.title}</span>
+      {event.resource.enlace && (
+        <a
+          href={event.resource.enlace}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title="Unirse a la llamada"
+          className="shrink-0 hover:opacity-70"
+        >
+          <Video className="w-3 h-3" />
+        </a>
+      )}
+    </span>
+  );
+}
 
 // Agenda propia de OPERAL OS -- lee calendar.listarEventosLocales, nunca
 // llama a Google. Es el evento canonico (docs/02_reglas_de_negocio (1).md
@@ -71,7 +95,7 @@ function AgendaOperal() {
         title: ev.titulo,
         start: new Date(ev.fechaHoraInicio),
         end: new Date(ev.fechaHoraFin),
-        resource: { leadId: ev.leadId, leadNombre: ev.leadNombre, googleEventId: ev.googleEventId },
+        resource: { leadId: ev.leadId, leadNombre: ev.leadNombre, googleEventId: ev.googleEventId, enlace: ev.enlace },
       })),
     [eventosLocales],
   );
@@ -257,6 +281,7 @@ function AgendaOperal() {
           eventPropGetter={(event) => ({
             className: event.resource.googleEventId ? undefined : "evento-sin-sync",
           })}
+          components={{ event: EventoConEnlace }}
           messages={{
             next: "Sig.",
             previous: "Ant.",
