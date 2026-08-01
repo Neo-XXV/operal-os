@@ -1,7 +1,18 @@
 import { Link, useLocation, Navigate } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
+import { trpc } from "@/providers/trpc";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   Users,
   UserPlus,
@@ -13,8 +24,104 @@ import {
   Phone,
   CalendarDays,
   Sparkles,
+  KeyRound,
 } from "lucide-react";
 import { useState } from "react";
+import { toast } from "sonner";
+
+// Dialogo de cambio de contraseña -- auto-servicio, cualquier usuario
+// logueado (user.changePassword es authedQuery, el id sale de ctx.user).
+// Cierra B-1 de docs/11_auditoria_seguridad.md: no existia ningun flujo
+// para rotar la propia contraseña sin tocar la base a mano.
+function CambiarContrasenaDialog({ children }: { children: React.ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [error, setError] = useState("");
+
+  const changePassword = trpc.user.changePassword.useMutation({
+    onSuccess: () => {
+      toast.success("Contraseña actualizada");
+      setOpen(false);
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setError("");
+    },
+    onError: (err) => setError(err.message),
+  });
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError("");
+    if (newPassword !== confirmPassword) {
+      setError("Las contraseñas nuevas no coinciden");
+      return;
+    }
+    changePassword.mutate({ currentPassword, newPassword });
+  };
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(o) => {
+        setOpen(o);
+        if (!o) {
+          setCurrentPassword("");
+          setNewPassword("");
+          setConfirmPassword("");
+          setError("");
+        }
+      }}
+    >
+      <DialogTrigger asChild>{children}</DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cambiar contraseña</DialogTitle>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4 mt-2">
+          <div className="space-y-2">
+            <Label>Contraseña actual</Label>
+            <Input
+              type="password"
+              value={currentPassword}
+              onChange={(e) => setCurrentPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Contraseña nueva</Label>
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="Minimo 6 caracteres"
+              autoComplete="new-password"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label>Confirmar contraseña nueva</Label>
+            <Input
+              type="password"
+              value={confirmPassword}
+              onChange={(e) => setConfirmPassword(e.target.value)}
+              autoComplete="new-password"
+            />
+          </div>
+          {error && (
+            <p className="text-sm text-destructive bg-destructive/10 px-3 py-2 rounded-lg">
+              {error}
+            </p>
+          )}
+          <Button type="submit" className="w-full" disabled={changePassword.isPending}>
+            {changePassword.isPending ? "Guardando..." : "Cambiar contraseña"}
+          </Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, logout, isAdmin, isSetter } = useAuth();
@@ -123,15 +230,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
 
           <Tooltip>
             <TooltipTrigger asChild>
-              <div
-                className="mt-1 w-8 h-8 rounded-full bg-sidebar-accent text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold cursor-default"
-                aria-label={`${user.nombre} (${user.rol.toLowerCase()})`}
-              >
-                {user.nombre.charAt(0).toUpperCase()}
-              </div>
+              <CambiarContrasenaDialog>
+                <button
+                  className="mt-1 w-8 h-8 rounded-full bg-sidebar-accent text-sidebar-accent-foreground flex items-center justify-center text-xs font-semibold hover:ring-2 hover:ring-sidebar-ring transition-shadow"
+                  aria-label={`${user.nombre} (${user.rol.toLowerCase()}) -- cambiar contraseña`}
+                >
+                  {user.nombre.charAt(0).toUpperCase()}
+                </button>
+              </CambiarContrasenaDialog>
             </TooltipTrigger>
             <TooltipContent side="right">
               {user.nombre} · <span className="capitalize">{user.rol.toLowerCase()}</span>
+              <br />
+              Click para cambiar contraseña
             </TooltipContent>
           </Tooltip>
         </div>
@@ -168,6 +279,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                 </Link>
               );
             })}
+            <CambiarContrasenaDialog>
+              <button className="flex items-center gap-2 px-3 py-2 text-sm text-sidebar-foreground/70 w-full">
+                <KeyRound className="w-4 h-4" />
+                Cambiar contraseña
+              </button>
+            </CambiarContrasenaDialog>
             <button
               onClick={logout}
               className="flex items-center gap-2 px-3 py-2 text-sm text-sidebar-foreground/70 w-full"
