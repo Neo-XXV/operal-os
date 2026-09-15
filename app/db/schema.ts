@@ -44,15 +44,21 @@ export const leads = mysqlTable(
   {
     id: serial("id").primaryKey(),
     nombre: varchar("nombre", { length: 255 }).notNull(),
-    instagramUsername: varchar("instagram_username", { length: 255 }).notNull(),
-    // Sprint 5: campo propio del Lead (como nombre/instagramUsername, no
+    // Migracion de dominio Instagram -> LinkedIn: la columna se renombro
+    // (0004), NO se transformo su contenido. Los 1642 leads previos a la
+    // migracion conservan su handle crudo de Instagram ("_aumakua_") adentro
+    // de este campo -- dato historico, mismo criterio de no reescribir el
+    // pasado que rige el Event Log. La validacion de URL de LinkedIn
+    // (lead.ts) solo aplica a escrituras nuevas.
+    linkedin: varchar("linkedin", { length: 255 }).notNull(),
+    // Sprint 5: campo propio del Lead (como nombre/linkedin, no
     // event-sourced) -- el scraping no trae email, se carga a mano cuando
     // hace falta para agendar en Calendar (docs/02_reglas_de_negocio (1).md
     // seccion 8).
     email: varchar("email", { length: 320 }),
   },
   (table) => ({
-    igIdx: index("ig_username_idx").on(table.instagramUsername),
+    linkedinIdx: index("linkedin_idx").on(table.linkedin),
   })
 );
 

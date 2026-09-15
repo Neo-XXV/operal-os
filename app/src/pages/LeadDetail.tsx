@@ -515,7 +515,7 @@ export default function LeadDetail() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-foreground">{lead.nombre}</h1>
-              <p className="text-muted-foreground">@{lead.instagramUsername}</p>
+              <p className="text-muted-foreground">{lead.linkedin}</p>
             </div>
           </div>
           <div className="flex items-center gap-3">

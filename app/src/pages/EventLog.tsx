@@ -95,7 +95,7 @@ export default function EventLog() {
                         </span>
                         {ev.lead && (
                           <span className="text-xs text-muted-foreground">
-                            {ev.lead.nombre} (@{ev.lead.instagramUsername})
+                            {ev.lead.nombre} ({ev.lead.linkedin})
                           </span>
                         )}
                         <span className="text-xs text-muted-foreground">

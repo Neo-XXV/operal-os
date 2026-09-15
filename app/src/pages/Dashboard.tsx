@@ -597,7 +597,7 @@ export default function Dashboard() {
                         Nombre
                       </th>
                       <th className="text-left py-2 px-3 font-medium text-muted-foreground">
-                        Instagram
+                        LinkedIn
                       </th>
                       <th className="text-left py-2 px-3 font-medium text-muted-foreground">
                         Etapa
@@ -617,7 +617,7 @@ export default function Dashboard() {
                           {lead.nombre}
                         </td>
                         <td className="py-2 px-3 text-muted-foreground">
-                          @{lead.instagramUsername}
+                          {lead.linkedin}
                         </td>
                         <td className="py-2 px-3">
                           <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-muted text-foreground">

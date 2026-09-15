@@ -41,12 +41,12 @@ Representa a un prospecto dentro del embudo comercial.
 Lead
   id
   nombre
-  instagram_username
+  linkedin
 ```
 
 **Importante:** `Lead` no guarda `etapa_actual`, `setter_asignado` ni `creado_en` como campos propios — todos son proyecciones derivadas del Event Log (último `ESTADO_CAMBIADO`, último `LEAD_ASIGNADO`, y `LEAD_CREADO.timestamp` respectivamente). Guardarlos aparte contradice el principio de Fuente de verdad y proyecciones. Si el rendimiento lo justifica más adelante, se resuelve con índices o vistas materializadas — nunca duplicando el dato como campo de la tabla.
 
-*(Nota: `instagram_username` asume que todos los leads, incluidos los del canal RPP, se contactan por Instagram. A confirmar — si RPP usa otro canal, este campo debe generalizarse.)*
+*(`linkedin` guarda la URL del perfil del prospecto, validada contra el host `linkedin.com` al escribir. Antes de la migración de dominio a LinkedIn el campo se llamaba `instagram_username` y guardaba un handle suelto; la migración `0004` renombró la columna **sin transformar su contenido**, así que los 1642 leads anteriores conservan su handle crudo de Instagram adentro de este campo. Es dato histórico deliberado — mismo criterio de no reescribir el pasado que rige el Event Log —, y la validación de URL solo corre en escrituras nuevas. Cualquier consumidor tiene que tolerar ambas formas.)*
 
 ### `Evento`
 La entidad central del sistema. Ver `03_catalogo_eventos.md` para el detalle de cada tipo y su payload.

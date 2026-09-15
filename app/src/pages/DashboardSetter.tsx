@@ -361,7 +361,7 @@ export default function DashboardSetter() {
                   <thead>
                     <tr className="border-b border-border bg-muted/50">
                       <th className="text-left p-3 font-medium text-muted-foreground">Nombre</th>
-                      <th className="text-left p-3 font-medium text-muted-foreground">Instagram</th>
+                      <th className="text-left p-3 font-medium text-muted-foreground">LinkedIn</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Etapa</th>
                       <th className="text-left p-3 font-medium text-muted-foreground">Último contacto</th>
                       <th className="text-right p-3 font-medium text-muted-foreground">Acciones</th>
@@ -375,7 +375,7 @@ export default function DashboardSetter() {
                             {lead.nombre || "(sin nombre)"}
                           </Link>
                         </td>
-                        <td className="p-3 text-muted-foreground">@{lead.instagramUsername}</td>
+                        <td className="p-3 text-muted-foreground">{lead.linkedin}</td>
                         <td className="p-3">
                           <span
                             className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${

@@ -28,7 +28,7 @@ async function main() {
     CREATE TABLE leads (
       id bigint unsigned auto_increment PRIMARY KEY,
       nombre varchar(255) NOT NULL,
-      instagram_username varchar(255) NOT NULL,
+      linkedin varchar(255) NOT NULL,
       email varchar(320)
     )
   `);
@@ -58,7 +58,7 @@ async function main() {
 
   await conn.execute("CREATE INDEX email_idx ON users(email)");
   await conn.execute("CREATE INDEX rol_idx ON users(rol)");
-  await conn.execute("CREATE INDEX ig_username_idx ON leads(instagram_username)");
+  await conn.execute("CREATE INDEX linkedin_idx ON leads(linkedin)");
   await conn.execute("CREATE INDEX event_lead_idx ON eventos(lead_id)");
   await conn.execute("CREATE INDEX event_tipo_idx ON eventos(tipo)");
   await conn.execute("CREATE INDEX event_timestamp_idx ON eventos(\`timestamp\`)");

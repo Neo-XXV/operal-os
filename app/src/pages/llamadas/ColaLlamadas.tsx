@@ -18,7 +18,7 @@ import { toast } from "sonner";
 type LeadCola = {
   leadId: number;
   nombre: string;
-  instagramUsername: string;
+  linkedin: string;
   estadoLlamada: "PENDIENTE_LLAMAR" | "PENDIENTE_REAGENDA" | "CERRADO" | "PERDIDO" | null;
   origen: string | null;
   setterId: number | null;
@@ -94,7 +94,7 @@ export function ColaLlamadas() {
                   <tr key={lead.leadId} className="border-b border-border hover:bg-muted/50">
                     <td className="p-3">
                       <p className="font-medium text-foreground">{lead.nombre || "(sin nombre)"}</p>
-                      <p className="text-muted-foreground text-xs">@{lead.instagramUsername}</p>
+                      <p className="text-muted-foreground text-xs">{lead.linkedin}</p>
                     </td>
                     <td className="p-3 text-muted-foreground">
                       {lead.setterNombre ?? "Sin asignar"}
@@ -179,7 +179,7 @@ function FormularioLlamada({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            Registrar llamada — {lead.nombre || `@${lead.instagramUsername}`}
+            Registrar llamada — {lead.nombre || lead.linkedin}
           </DialogTitle>
           <p className="text-sm text-muted-foreground">
             Esta será la llamada N°{numero} de hasta 3.

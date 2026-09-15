@@ -49,7 +49,7 @@ Test simétrico (mismo espíritu que el criterio de 4 puntos de `03_catalogo_eve
 
 Regla dura, aplicada en la capa que arma el contexto (nunca como criterio caso por caso):
 
-> **El contexto que se le manda al modelo nunca incluye `nombre`, `instagram_username` ni `email` de un lead, ni el `nombre` de un setter. Solo IDs numéricos (`lead_id`, `setter_id`) y datos agregados/estructurados.**
+> **El contexto que se le manda al modelo nunca incluye `nombre`, `linkedin` ni `email` de un lead, ni el `nombre` de un setter. Solo IDs numéricos (`lead_id`, `setter_id`) y datos agregados/estructurados.**
 
 Por qué alcanza con IDs:
 
@@ -82,7 +82,7 @@ eventos (Event Log, inmutable — MySQL)
                 ▼
         ContextBuilder (nuevo, capa fina — una función por funcionalidad)
         arma un JSON acotado: SOLO los campos que esa consulta necesita,
-        sin nombre/instagram/email (sección 3), con cada número etiquetado
+        sin nombre/linkedin/email (sección 3), con cada número etiquetado
                 │
                 ▼
         AIProvider (interfaz única, sección 7)

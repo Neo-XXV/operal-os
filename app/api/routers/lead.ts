@@ -5,6 +5,35 @@ import { leads, eventos } from "@db/schema";
 import { eq, desc, inArray } from "drizzle-orm";
 import { conLeadId } from "./event";
 
+// URL de perfil de LinkedIn. Mismo patron que enlaceSchema (calendar.ts):
+// .url() + verificacion de protocolo, pero aca ademas se exige el host.
+//
+// El host se compara parseando con `new URL()`, NO con un regex sobre el
+// string: un /linkedin\.com/ suelto aceptaria "https://evil.com/?x=linkedin.com"
+// o "https://linkedin.com.evil.com". Se valida el hostname exacto (o un
+// subdominio real como ar.linkedin.com), que es lo unico que el navegador
+// va a resolver.
+//
+// Nota sobre el dato historico: los 1642 leads previos a la migracion
+// Instagram -> LinkedIn (0004) tienen handles crudos que NO pasan esta
+// validacion. Es a proposito -- la columna se renombro sin transformar su
+// contenido, y esta regla solo corre en escrituras nuevas.
+const HOSTS_LINKEDIN = ["linkedin.com", "www.linkedin.com"];
+
+const linkedinSchema = z
+  .string()
+  .trim()
+  .url("El enlace de LinkedIn no es una URL valida")
+  .refine((v) => /^https?:\/\//i.test(v), "El enlace debe empezar con http:// o https://")
+  .refine((v) => {
+    try {
+      const host = new URL(v).hostname.toLowerCase();
+      return HOSTS_LINKEDIN.includes(host) || host.endsWith(".linkedin.com");
+    } catch {
+      return false;
+    }
+  }, "Debe ser una URL de linkedin.com");
+
 export const leadRouter = createRouter({
   // El setter carga el lead cuando decide contactarlo: LEAD_CREADO, la
   // auto-asignacion y la primera transicion (null -> A) ocurren en el mismo acto.
@@ -16,7 +45,7 @@ export const leadRouter = createRouter({
         // Nombre queda vacio si no se completa (p.ej. carga rapida por username) —
         // es un dato real que se completa despues, no se rellena con un valor falso.
         nombre: z.string().default(""),
-        instagramUsername: z.string().min(1, "Username requerido"),
+        linkedin: linkedinSchema,
         setterId: z.number().optional(),
         origen: z.enum(["SCRAPING", "MANUAL", "RPP"]).default("MANUAL"),
       }),
@@ -31,7 +60,7 @@ export const leadRouter = createRouter({
           .insert(leads)
           .values({
             nombre: input.nombre,
-            instagramUsername: input.instagramUsername,
+            linkedin: input.linkedin,
           })
           .$returningId();
 
@@ -122,7 +151,7 @@ export const leadRouter = createRouter({
       return { ...lead, ...proyecciones };
     }),
 
-  // Nombre e Instagram son campos propios de la entidad Lead (no proyecciones
+  // Nombre y LinkedIn son campos propios de la entidad Lead (no proyecciones
   // del Event Log) — editables directamente, como marca la tabla de columnas
   // del Sprint 2. Email (Sprint 5) sigue el mismo criterio -- se completa a
   // mano cuando hace falta para agendar en Calendar, el scraping no lo trae.
@@ -131,7 +160,7 @@ export const leadRouter = createRouter({
       z.object({
         id: z.number(),
         nombre: z.string().optional(),
-        instagramUsername: z.string().min(1, "Username requerido").optional(),
+        linkedin: linkedinSchema.optional(),
         email: z.string().email().optional(),
       }),
     )

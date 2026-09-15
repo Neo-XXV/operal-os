@@ -1248,7 +1248,7 @@ export const eventRouter = createRouter({
       return {
         leadId: id,
         nombre: lead.nombre,
-        instagramUsername: lead.instagramUsername,
+        linkedin: lead.linkedin,
         estadoLlamada: estados.get(id),
         origen: origenPorLead.get(id) ?? null,
         setterId,

@@ -180,7 +180,7 @@ export const calendarRouter = createRouter({
       }
 
       // Email del lead: campo propio (no event-sourced, igual que
-      // nombre/instagramUsername) -- se guarda si vino y difiere del actual.
+      // nombre/linkedin) -- se guarda si vino y difiere del actual.
       if (input.email && input.email !== lead.email) {
         await db.update(leads).set({ email: input.email }).where(eq(leads.id, input.leadId));
       }

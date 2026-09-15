@@ -49,7 +49,7 @@ type AnomaliaConversionPayload = {
 
 // ContextBuilder puro -- docs/10_arquitectura_ia.md seccion 5. Arma
 // exactamente los campos que esta pregunta necesita, nunca nombre/
-// instagram/email de nadie (seccion 3) -- ni siquiera los selecciona.
+// linkedin/email de nadie (seccion 3) -- ni siquiera los selecciona.
 export function construirContextoConversion(payload: AnomaliaConversionPayload) {
   return {
     tipo_anomalia: payload.tipo_anomalia,

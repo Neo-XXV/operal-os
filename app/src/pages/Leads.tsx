@@ -134,9 +134,12 @@ function TablaSetter() {
 
   const handleQuickAdd = (e: React.FormEvent) => {
     e.preventDefault();
-    const username = quickUsername.trim();
-    if (!username) return;
-    createLead.mutate({ instagramUsername: username });
+    const url = quickUsername.trim();
+    if (!url) return;
+    // Se pega la URL completa del perfil (copiada del navegador), no un
+    // handle suelto -- la validacion de lead.create exige host linkedin.com.
+    // Un error de formato vuelve por el toast de onError de la mutation.
+    createLead.mutate({ linkedin: url });
   };
 
   const toggleSelected = (id: number) => {
@@ -214,7 +217,7 @@ function TablaSetter() {
   const filtered = (leads ?? []).filter((l) => {
     const q = search.toLowerCase();
     const matchSearch =
-      l.nombre.toLowerCase().includes(q) || l.instagramUsername.toLowerCase().includes(q);
+      l.nombre.toLowerCase().includes(q) || l.linkedin.toLowerCase().includes(q);
     const matchEtapa = !filtroEtapa || l.etapaActual === filtroEtapa;
     return matchSearch && matchEtapa;
   });
@@ -231,7 +234,7 @@ function TablaSetter() {
         <form onSubmit={handleQuickAdd} className="flex items-center gap-2">
           <Input
             autoFocus
-            placeholder="Pegar username de Instagram y Enter..."
+            placeholder="Pegar URL de LinkedIn y Enter..."
             value={quickUsername}
             onChange={(e) => setQuickUsername(e.target.value)}
             disabled={createLead.isPending}
@@ -291,7 +294,7 @@ function TablaSetter() {
                   <tr className="border-b border-border/70 bg-foreground/[0.03]">
                     <th className="w-10 p-3"></th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Nombre</th>
-                    <th className="text-left p-3 font-medium text-muted-foreground">Instagram</th>
+                    <th className="text-left p-3 font-medium text-muted-foreground">LinkedIn</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Estado</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Seguimientos</th>
                     <th className="text-left p-3 font-medium text-muted-foreground">Ultimo contacto</th>
@@ -322,10 +325,10 @@ function TablaSetter() {
                         </td>
                         <td className="p-1">
                           <EditableCell
-                            key={lead.instagramUsername}
-                            value={lead.instagramUsername}
+                            key={lead.linkedin}
+                            value={lead.linkedin}
                             onCommit={(v) => {
-                              if (v) updateLead.mutate({ id: lead.id, instagramUsername: v });
+                              if (v) updateLead.mutate({ id: lead.id, linkedin: v });
                             }}
                           />
                         </td>
@@ -415,7 +418,7 @@ function VistaAdmin() {
 
   const [open, setOpen] = useState(false);
   const [nombre, setNombre] = useState("");
-  const [igUsername, setIgUsername] = useState("");
+  const [linkedinUrl, setLinkedinUrl] = useState("");
   const [setterId, setSetterId] = useState<string>("");
   const [search, setSearch] = useState("");
   const [error, setError] = useState("");
@@ -432,7 +435,7 @@ function VistaAdmin() {
       utils.lead.list.invalidate();
       setOpen(false);
       setNombre("");
-      setIgUsername("");
+      setLinkedinUrl("");
       setSetterId("");
       setError("");
     },
@@ -461,20 +464,20 @@ function VistaAdmin() {
     const q = search.toLowerCase();
     return (
       l.nombre.toLowerCase().includes(q) ||
-      l.instagramUsername.toLowerCase().includes(q)
+      l.linkedin.toLowerCase().includes(q)
     );
   });
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-    if (!nombre || !igUsername) {
-      setError("Nombre e Instagram son requeridos");
+    if (!nombre || !linkedinUrl) {
+      setError("Nombre y LinkedIn son requeridos");
       return;
     }
     createLead.mutate({
       nombre,
-      instagramUsername: igUsername,
+      linkedin: linkedinUrl,
       setterId: setterId ? parseInt(setterId) : undefined,
     });
   };
@@ -519,11 +522,12 @@ function VistaAdmin() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label>Instagram Username</Label>
+                  <Label>URL de LinkedIn</Label>
                   <Input
-                    value={igUsername}
-                    onChange={(e) => setIgUsername(e.target.value)}
-                    placeholder="sin @"
+                    type="url"
+                    value={linkedinUrl}
+                    onChange={(e) => setLinkedinUrl(e.target.value)}
+                    placeholder="https://www.linkedin.com/in/..."
                   />
                 </div>
                 {isAdmin && (
@@ -592,8 +596,25 @@ function VistaAdmin() {
                       <p className="font-semibold text-foreground">
                         {lead.nombre}
                       </p>
-                      <p className="text-sm text-muted-foreground">
-                        @{lead.instagramUsername}
+                      {/* El valor puede ser una URL de LinkedIn (leads nuevos)
+                          o un handle crudo de Instagram (los 1642 previos a la
+                          migracion 0004, que no se transformaron). Solo se
+                          renderiza como link si de verdad es http(s) -- un
+                          handle suelto queda como texto plano. */}
+                      <p className="text-sm text-muted-foreground truncate max-w-xs">
+                        {/^https?:\/\//i.test(lead.linkedin) ? (
+                          <a
+                            href={lead.linkedin}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="hover:underline"
+                          >
+                            {lead.linkedin}
+                          </a>
+                        ) : (
+                          lead.linkedin
+                        )}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         Asignado a:{" "}
