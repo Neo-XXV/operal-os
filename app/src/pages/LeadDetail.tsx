@@ -112,7 +112,10 @@ const TIPOS_OBJECION = [
   { value: "TIEMPO", label: "Tiempo" },
   { value: "EXPERIENCIA_PREVIA_SIMILAR", label: "Ya intentó algo parecido antes" },
   { value: "YA_TIENE_PROVEEDOR", label: "Ya tiene proveedor" },
-  { value: "YA_PAGO_MENTOR", label: "Ya le pagó a un mentor/coach" },
+  // YA_PAGO_MENTOR se discontinuo con la migracion de dominio a LinkedIn
+  // (era del contexto Instagram/coaching, no aplica a clinicas/cirujanos).
+  // No se ofrece mas, pero el valor sigue siendo legible en eventos ya
+  // registrados -- el Event Log es inmutable.
   { value: "OTRA", label: "Otra" },
 ];
 

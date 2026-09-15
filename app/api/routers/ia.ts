@@ -10,7 +10,7 @@ import { ANOMALIA_CONFIG, type TipoAnomaliaTiempo } from "@contracts/anomaliaCon
 
 const TIPOS_CONVERSION = ["MSR_BAJO", "PRR_BAJO", "CSR_BAJO"] as const;
 
-// Taxonomia cerrada de OBJECION_REGISTRADA -- docs/03_catalogo_eventos.md
+// Taxonomia VIGENTE de OBJECION_REGISTRADA -- docs/03_catalogo_eventos.md
 // evento 6. Redefinida aca (no exportada desde event.ts hoy) porque es la
 // unica funcionalidad de IA que la necesita.
 const TIPOS_OBJECION = [
@@ -19,9 +19,21 @@ const TIPOS_OBJECION = [
   "TIEMPO",
   "EXPERIENCIA_PREVIA_SIMILAR",
   "YA_TIENE_PROVEEDOR",
-  "YA_PAGO_MENTOR",
   "OTRA",
 ] as const;
+
+// Tipos discontinuados que pueden existir en eventos YA registrados (el
+// Event Log es inmutable, no se reescriben). Se mapean a un tipo vigente al
+// agrupar -- sin esto un evento historico no entraria en conteo_por_tipo
+// pero SI en `total`, y los porcentajes dejarian de sumar 1.
+const TIPOS_OBJECION_DISCONTINUADOS: Record<string, (typeof TIPOS_OBJECION)[number]> = {
+  // Del contexto Instagram/coaching, no aplica a clinicas/cirujanos.
+  YA_PAGO_MENTOR: "OTRA",
+};
+
+function tipoObjecionVigente(tipo: string): string {
+  return TIPOS_OBJECION_DISCONTINUADOS[tipo] ?? tipo;
+}
 
 // docs/10_arquitectura_ia.md seccion 6, punto 2 -- instruccion anti-
 // alucinacion explicita y no negociable, comun a toda funcionalidad de IA.
@@ -80,9 +92,12 @@ export function construirContextoObjeciones(objeciones: { payload: unknown }[], 
   const muestra_detalle: { tipo: string; detalle: string }[] = [];
   for (const ev of objeciones) {
     const p = ev.payload as ObjecionPayload;
-    if (p.tipo in conteo_por_tipo) conteo_por_tipo[p.tipo]++;
+    // Un tipo discontinuado (evento historico) se cuenta bajo su equivalente
+    // vigente, no se descarta -- ver TIPOS_OBJECION_DISCONTINUADOS.
+    const tipo = tipoObjecionVigente(p.tipo);
+    if (tipo in conteo_por_tipo) conteo_por_tipo[tipo]++;
     if (p.detalle && muestra_detalle.length < MAX_MUESTRA_DETALLE) {
-      muestra_detalle.push({ tipo: p.tipo, detalle: p.detalle });
+      muestra_detalle.push({ tipo, detalle: p.detalle });
     }
   }
 

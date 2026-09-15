@@ -168,7 +168,7 @@ Este catálogo cubre **eventos del Lead** — hechos que ocurren sobre un lead i
 **Payload:**
 ```json
 {
-  "tipo": "PRECIO | DESCONFIANZA | TIEMPO | EXPERIENCIA_PREVIA_SIMILAR | YA_TIENE_PROVEEDOR | YA_PAGO_MENTOR | OTRA",
+  "tipo": "PRECIO | DESCONFIANZA | TIEMPO | EXPERIENCIA_PREVIA_SIMILAR | YA_TIENE_PROVEEDOR | OTRA",
   "detalle": "texto libre",
   "es_nueva": true
 }
@@ -180,8 +180,10 @@ Taxonomía cerrada (definida con el dueño del negocio):
 - `TIEMPO`
 - `EXPERIENCIA_PREVIA_SIMILAR` — ya intentó algo parecido antes
 - `YA_TIENE_PROVEEDOR` — ya está trabajando con alguien
-- `YA_PAGO_MENTOR` — ya le pagó a un mentor/coach
 - `OTRA` — para lo que no encaje en ninguna de las anteriores
+
+**Valores discontinuados** (no se pueden registrar más, pero siguen existiendo en eventos ya registrados):
+- `YA_PAGO_MENTOR` — *"ya le pagó a un mentor/coach"*. Discontinuado con la migración de dominio a LinkedIn: era propio del contexto Instagram/coaching y no aplica a clínicas/cirujanos. **Los eventos históricos con este valor no se reescriben** — el Event Log es inmutable. `event.create` lo rechaza de ahora en más, y cualquier vista que agrupe por tipo debe mapearlo a `OTRA` para que no se caiga del conteo (ver `TIPOS_OBJECION_DISCONTINUADOS` en `ia.ts`). Al momento de discontinuarlo había 0 eventos registrados con este valor en la base de desarrollo, pero el mapeo existe igual porque otras bases (producción) pueden tenerlos.
 
 **Reglas:** Ninguna todavía sobre revisión/actualización de guía central — **pregunta abierta pendiente de tu respuesta** (¿alguien revisa las objeciones nuevas y las suma a una guía, o quedan archivadas?). No puede registrarse sobre un lead descartado (ver reglas de `LEAD_DESCARTADO`).
 

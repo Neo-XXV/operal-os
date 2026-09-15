@@ -613,13 +613,17 @@ export const eventRouter = createRouter({
 
       if (input.tipo === "OBJECION_REGISTRADA") {
         const payload = input.payload as { tipo: string };
+        // Taxonomia vigente para eventos NUEVOS. YA_PAGO_MENTOR se
+        // discontinuo con la migracion de dominio a LinkedIn (era del
+        // contexto Instagram/coaching) -- no se acepta mas al escribir, pero
+        // los eventos ya registrados con ese valor NO se tocan: el Event Log
+        // es inmutable. Ver docs/03_catalogo_eventos.md evento 6.
         const tiposValidos = [
           "PRECIO",
           "DESCONFIANZA",
           "TIEMPO",
           "EXPERIENCIA_PREVIA_SIMILAR",
           "YA_TIENE_PROVEEDOR",
-          "YA_PAGO_MENTOR",
           "OTRA",
         ];
         if (!tiposValidos.includes(payload.tipo)) {
