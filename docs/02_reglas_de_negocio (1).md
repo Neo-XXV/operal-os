@@ -112,6 +112,15 @@ Si la respuesta es no a ambas, esa acción no debe existir en la V1.
 
 ### Anomalías de tiempo (lead individual atascado)
 
+> ⏸ **PAUSADAS desde la migración de dominio a LinkedIn.** Los cuatro umbrales de esta subsección (24h / 24h / 72h / 48h) se calibraron con el ritmo de conversación de Instagram DM. LinkedIn tiene una cadencia distinta y **todavía no hay datos propios para recalibrarlos**: dejarlos activos generaría una avalancha de falsos positivos, que enseñaría al equipo a ignorar las alertas — peor que no tenerlas.
+>
+> Lo que está pausado es la **detección de anomalías nuevas** de tiempo (flag `tiempoActivo: false` en `anomaliaConfig.ts`). Concretamente:
+> - Las anomalías de **conversión** siguen activas — sus umbrales son tasas del embudo, no dependen de la cadencia del canal.
+> - Las anomalías de tiempo **ya registradas** siguen visibles en los dashboards y en la IA: son hechos del Event Log, y ocultarlas sería reescribir el pasado.
+> - El código de detección (`evaluarAnomaliasDeTiempo`) queda intacto y testeado, solo no se lo invoca. **Reactivar es poner el flag en `true`**, sin revertir nada.
+>
+> Pendiente antes de reactivar: juntar datos reales de ritmo de LinkedIn y recalibrar los cuatro umbrales. Las reglas de abajo quedan documentadas como están porque son las que van a volver a regir (con otros números) cuando se reactiven.
+
 Usan timestamps del Event Log y, para C→D, la fecha del calendario interno del lead (`CALENDAR_EVENTO_CREADO`/`ACTUALIZADO`/`SINCRONIZADO` vigente, ver `08_modelo_de_datos.md`).
 
 - **A→MS:** más de 24h desde el primer mensaje sin que el lead responda. **Anomalía del lead**, no del setter — el setter no controla cuándo responde la persona. Se mide con el timestamp del `ESTADO_CAMBIADO` a `MS` (ese evento ya marca cuándo respondió; no hace falta registrar nada nuevo).

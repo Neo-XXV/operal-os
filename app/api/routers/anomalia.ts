@@ -254,12 +254,20 @@ export async function evaluarAnomaliasDeTiempo(db: ReturnType<typeof getDb>): Pr
 }
 
 // ─── Orquestacion general + router ───────────────────────────────────────
+// La deteccion de anomalias de TIEMPO esta pausada tras la migracion de
+// dominio a LinkedIn (ANOMALIA_CONFIG.tiempoActivo): sus umbrales asumen el
+// ritmo de Instagram DM y darian falsos positivos hasta recalibrarlos con
+// datos reales. evaluarAnomaliasDeTiempo() queda intacta y testeada -- solo
+// no se la invoca. Reactivar = poner tiempoActivo en true.
+//
+// La de CONVERSION sigue activa: sus umbrales son tasas del embudo, no
+// dependen de la cadencia del canal.
 export async function evaluarAnomalias(db: ReturnType<typeof getDb>) {
   const [tiempo, conversion] = await Promise.all([
-    evaluarAnomaliasDeTiempo(db),
+    ANOMALIA_CONFIG.tiempoActivo ? evaluarAnomaliasDeTiempo(db) : Promise.resolve(0),
     evaluarAnomaliasDeConversion(db),
   ]);
-  return { insertadas: tiempo + conversion };
+  return { insertadas: tiempo + conversion, tiempoPausado: !ANOMALIA_CONFIG.tiempoActivo };
 }
 
 export const anomaliaRouter = createRouter({

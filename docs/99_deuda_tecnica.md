@@ -51,6 +51,22 @@ Permanente — no hay acción pendiente. Si en el futuro se construye un filtro 
 
 ## Detección de anomalías
 
+### Anomalías de tiempo pausadas hasta recalibrar con datos de LinkedIn
+
+Origen:
+- Migración de dominio Instagram → LinkedIn. Los cuatro umbrales de tiempo (A→MS 24h, MS→B 24h, B→C 72h, C→D 48h por defecto) se calibraron observando el ritmo de conversación de Instagram DM.
+
+Impacto:
+- LinkedIn tiene una cadencia de respuesta distinta (más lenta, en general). Con los umbrales de Instagram, la detección marcaría como anómalo el comportamiento normal del canal nuevo — una avalancha de falsos positivos que entrena al equipo a ignorar las alertas.
+- Mientras esté pausado, **ningún lead atascado va a generar una alerta de tiempo**. Las de conversión siguen funcionando. Las anomalías de tiempo ya registradas siguen visibles (Event Log inmutable).
+
+Decisión:
+- Pausar la detección detrás de `ANOMALIA_CONFIG.tiempoActivo` (hoy `false`) en vez de borrar o comentar el código. `evaluarAnomaliasDeTiempo()` queda intacta y cubierta por sus tests; `evaluarAnomalias()` simplemente no la invoca. Reactivar es cambiar un booleano.
+- No se recalibraron los umbrales "a ojo": inventar números sin datos sería cambiar un falso positivo conocido por uno desconocido.
+
+Estado:
+Pendiente — reactivar cuando haya suficiente historial de LinkedIn para medir los tiempos reales entre etapas y fijar umbrales con evidencia. Ver `02_reglas_de_negocio (1).md` sección 9.
+
 ### `setter_id` en anomalías de tiempo es el dueño actual, no necesariamente quien causó la demora
 
 Origen:
