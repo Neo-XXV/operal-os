@@ -1,0 +1,1 @@
+Redeploy trigger: forzar que Railway tome el HEAD de master (ff64fb8) y corra el release step (drizzle-kit migrate), aplicando 0004_instagram_a_linkedin. Archivo inofensivo, se puede borrar despues del deploy.
