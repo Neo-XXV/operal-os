@@ -26,7 +26,7 @@ startCommand = "npm run start"
 # fallo real, y devolvio exit code 1 -- el codigo de salida es la unica
 # senal que Railway usa para decidir si promueve el release, no parsea
 # stdout ni busca texto de error.
-releaseCommand = "npm run db:migrate"
+preDeployCommand = ["npm run db:migrate"]
 
 # ─── Si una migracion queda a medio aplicar (recuperacion manual) ─────────
 #
